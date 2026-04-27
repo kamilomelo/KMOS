@@ -1,4 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# KMOS USB Flasher
+# Copyright (c) 2026 Kamilo Melo, KM-RoBoTa
+# SPDX-License-Identifier: MIT
+
 set -Eeuo pipefail
 
 SCRIPT_PATH="$(readlink -f "$0")"
@@ -12,25 +16,158 @@ ARCH="x86_64"
 ARCH_BASE_URLS=()
 ROCKY_BASE_URLS=()
 
+strip_mount_metadata() {
+  local source="$1"
+  printf '%s\n' "${source%%\[*}"
+}
+
+parent_disk_for_mount() {
+  local mount_source="$1"
+  local block_source=""
+  local parent_name=""
+
+  [[ -n "$mount_source" ]] || return 0
+  block_source="$(strip_mount_metadata "$mount_source")"
+  parent_name="$(lsblk -no pkname "$block_source" 2>/dev/null || true)"
+
+  if [[ -n "$parent_name" ]]; then
+    printf '/dev/%s\n' "$parent_name"
+  fi
+}
+
 SCRIPT_DEV="$(findmnt -n -o SOURCE --target "$SCRIPT_DIR" 2>/dev/null || true)"
 SCRIPT_DISK=""
 if [[ -n "$SCRIPT_DEV" ]]; then
-  SCRIPT_DISK="/dev/$(lsblk -no pkname "$SCRIPT_DEV" 2>/dev/null || true)"
+  SCRIPT_DISK="$(parent_disk_for_mount "$SCRIPT_DEV")"
 fi
 
 ROOT_DEV="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
 ROOT_DISK=""
 if [[ -n "$ROOT_DEV" ]]; then
-  ROOT_DISK="/dev/$(lsblk -no pkname "$ROOT_DEV" 2>/dev/null || true)"
+  ROOT_DISK="$(parent_disk_for_mount "$ROOT_DEV")"
 fi
+
+UI_RESET=""
+UI_BOLD=""
+UI_DIM=""
+UI_HEADER=""
+UI_INFO=""
+UI_SUCCESS=""
+UI_WARN=""
+UI_DANGER=""
+STEP_INDEX=0
+STEP_TOTAL=4
+
+repeat_char() {
+  local char="$1"
+  local count="$2"
+  local out=""
+
+  while (( count > 0 )); do
+    out+="$char"
+    ((count--))
+  done
+
+  printf '%s' "$out"
+}
+
+init_ui() {
+  if [[ -t 2 && "${TERM:-dumb}" != "dumb" ]]; then
+    UI_RESET=$'\033[0m'
+    UI_BOLD=$'\033[1m'
+    UI_DIM=$'\033[2m'
+    UI_HEADER=$'\033[34m'
+    UI_INFO=$'\033[37m'
+    UI_SUCCESS=$'\033[32m'
+    UI_WARN=$'\033[33m'
+    UI_DANGER=$'\033[31m'
+  fi
+}
 
 log() {
   printf '%s\n' "$*" >&2
 }
 
+info() {
+  printf '%b%s%b\n' "${UI_INFO}${UI_BOLD}" "$*" "$UI_RESET" >&2
+}
+
+warn() {
+  printf '%bWARNING:%b %s\n' "${UI_WARN}${UI_BOLD}" "$UI_RESET" "$*" >&2
+}
+
+success() {
+  printf '%b▸%b %s\n' "$UI_SUCCESS" "$UI_RESET" "$*" >&2
+}
+
+final_success() {
+  printf '\n%b✔%b %s\n\n' "$UI_SUCCESS" "$UI_RESET" "$*" >&2
+}
+
 die() {
-  printf 'ERROR: %s\n' "$*" >&2
+  printf '%bERROR:%b %s\n' "${UI_DANGER}${UI_BOLD}" "$UI_RESET" "$*" >&2
   exit 1
+}
+
+section() {
+  local title="$1"
+  printf '\n%b%s%b\n' "${UI_HEADER}${UI_BOLD}" "$title" "$UI_RESET" >&2
+  printf '%s\n' "$(repeat_char "=" "${#title}")" >&2
+}
+
+detail() {
+  local key="$1"
+  local value="$2"
+  printf '  %b%-12s%b %s\n' "$UI_DIM" "$key" "$UI_RESET" "$value" >&2
+}
+
+progress_bar() {
+  local current="$1"
+  local total="$2"
+  local width="${3:-28}"
+  local filled=0
+  local percent=0
+
+  if (( total > 0 )); then
+    filled=$(( current * width / total ))
+    percent=$(( current * 100 / total ))
+  fi
+
+  printf '[%s%s] %3d%%' \
+    "$(repeat_char "#" "$filled")" \
+    "$(repeat_char "-" "$((width - filled))")" \
+    "$percent"
+}
+
+advance_step() {
+  local label="$1"
+  local bar
+
+  ((STEP_INDEX += 1))
+  bar="$(progress_bar "$STEP_INDEX" "$STEP_TOTAL")"
+
+  printf '\n%bStep %d/%d%b %s\n' "${UI_HEADER}${UI_BOLD}" "$STEP_INDEX" "$STEP_TOTAL" "$UI_RESET" "$label" >&2
+  printf '  %s\n' "$bar" >&2
+}
+
+substep() {
+  printf '  %b>%b %s\n' "$UI_DIM" "$UI_RESET" "$*" >&2
+}
+
+warning_block() {
+  local message="$1"
+  printf '\n%b%s%b\n' "${UI_DANGER}${UI_BOLD}" "Warning" "$UI_RESET" >&2
+  printf '  %s\n' "$message" >&2
+}
+
+print_banner() {
+  printf '\n' >&2
+  printf '%b%s%b\n' "${UI_HEADER}${UI_BOLD}" "$(repeat_char "=" 16)" "$UI_RESET" >&2
+  printf '%b%s%b\n' "${UI_HEADER}${UI_BOLD}" "KMOS USB Flasher" "$UI_RESET" >&2
+  printf '%b%s%b\n' "${UI_HEADER}${UI_BOLD}" "$(repeat_char "=" 16)" "$UI_RESET" >&2
+  log "Bootable USB creator for good Linux Operating Systems."
+  log "Downloads, verifies, and writes the selected ISO to a USB device."
+  log "Warning: the selected target disk will be erased."
 }
 
 normalize_url() {
@@ -61,7 +198,7 @@ resolve_base_url() {
       printf '%s\n' "$mirror"
       return 0
     fi
-    log "Mirror unavailable: $mirror"
+    warn "Mirror unavailable: $mirror"
   done
 
   return 1
@@ -150,7 +287,13 @@ download_file() {
   local url="$1"
   local out="$2"
 
-  curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 -o "$out" "$url"
+  substep "Downloading $(basename "$out")"
+
+  if [[ -t 2 ]]; then
+    curl --progress-bar -fL --retry 3 --retry-delay 2 --connect-timeout 15 -o "$out" "$url"
+  else
+    curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 -o "$out" "$url"
+  fi
 }
 
 verify_arch_download() {
@@ -165,7 +308,7 @@ verify_arch_download() {
 prepare_arch() {
   local arch_base_url
   arch_base_url="$(resolve_base_url ARCH_BASE_URLS)" || die "No reachable Arch mirror found"
-  log "Using Arch mirror: $arch_base_url"
+  detail "Arch mirror" "$arch_base_url"
 
   local iso
   iso="$(fetch_latest_arch_iso_name "$arch_base_url")" || die "Cannot read Arch latest index"
@@ -182,13 +325,13 @@ prepare_arch() {
 
   if (( needs_download == 0 )); then
     if verify_arch_download "$iso" "$sha_file" "$b2_file"; then
-      log "Arch ISO already present and verified."
+      success "Arch ISO already present and verified."
       printf '%s\n' "$arch_dir/$iso"
       return 0
     fi
-    log "Existing Arch files failed verification. Re-downloading."
+    warn "Existing Arch files failed verification. Re-downloading."
   else
-    log "Downloading Arch ISO and checksums."
+    info "Downloading Arch ISO and checksums."
   fi
 
   rm -f "$iso" "$sha_file" "$b2_file"
@@ -197,7 +340,7 @@ prepare_arch() {
   download_file "$arch_base_url/$b2_file" "$b2_file"
 
   verify_arch_download "$iso" "$sha_file" "$b2_file" || die "Arch checksum verification failed"
-  log "Arch ISO verified."
+  success "Arch ISO verified."
   printf '%s\n' "$arch_dir/$iso"
 }
 
@@ -250,7 +393,7 @@ verify_rocky_download() {
 prepare_rocky() {
   local rocky_base_url
   rocky_base_url="$(resolve_base_url ROCKY_BASE_URLS)" || die "No reachable Rocky mirror found"
-  log "Using Rocky mirror: $rocky_base_url"
+  detail "Rocky mirror" "$rocky_base_url"
 
   local major
   major="$(fetch_latest_rocky_major "$rocky_base_url")"
@@ -281,13 +424,13 @@ prepare_rocky() {
 
   if (( needs_download == 0 )); then
     if verify_rocky_download "$iso_name" "$checksum_name"; then
-      log "Rocky ISO already present and verified."
+      success "Rocky ISO already present and verified."
       printf '%s\n' "$rocky_dir/$iso_name"
       return 0
     fi
-    log "Existing Rocky files failed verification. Re-downloading."
+    warn "Existing Rocky files failed verification. Re-downloading."
   else
-    log "Downloading Rocky ISO and checksum."
+    info "Downloading Rocky ISO and checksum."
   fi
 
   rm -f "$iso_name" "$checksum_name"
@@ -295,7 +438,7 @@ prepare_rocky() {
   download_file "$iso_dir/$checksum_name" "$checksum_name" || die "Failed downloading CHECKSUM"
 
   verify_rocky_download "$iso_name" "$checksum_name" || die "Rocky checksum verification failed"
-  log "Rocky ISO verified."
+  success "Rocky ISO verified."
   printf '%s\n' "$rocky_dir/$iso_name"
 }
 
@@ -305,7 +448,7 @@ list_candidate_usb_disks() {
 }
 
 print_disks() {
-  log "Available disks:"
+  section "Available Disks"
   lsblk -d -o NAME,SIZE,TRAN,RM,MODEL >&2
 }
 
@@ -319,17 +462,19 @@ validate_target_disk() {
 select_target_disk() {
   local target=""
   local candidates=()
+  local use_auto=""
+  local ack=""
 
   mapfile -t candidates < <(list_candidate_usb_disks)
 
-  log "Insert USB drive now, then press Enter."
+  info "Insert the USB drive now, then press Enter."
   read -r
 
   mapfile -t candidates < <(list_candidate_usb_disks)
 
   if [[ ${#candidates[@]} -eq 1 ]]; then
     target="${candidates[0]}"
-    log "Auto-detected USB device: $target"
+    success "Auto-detected USB device: $target"
     read -r -p "Use this device? [y/N]: " use_auto
     if [[ ! "$use_auto" =~ ^[Yy]$ ]]; then
       target=""
@@ -372,23 +517,24 @@ flash_iso() {
 
   [[ -f "$iso_path" ]] || die "ISO not found: $iso_path"
 
-  log ""
-  log "ISO:    $iso_path"
-  log "Target: $target_disk"
+  section "Ready To Flash"
+  detail "ISO" "$iso_path"
+  detail "Target" "$target_disk"
+  warning_block "All data on $target_disk will be permanently erased."
   confirm_yes_no "Proceed with flashing?" 1 || die "Cancelled"
 
   unmount_target_partitions "$target_disk"
 
-  log "Writing image..."
+  info "Writing image to USB. This can take several minutes."
   sudo dd if="$iso_path" of="$target_disk" bs=4M status=progress oflag=sync conv=fsync
   sync
-  log "Done. USB should be ready."
+  success "USB should be ready."
 }
 
 cleanup_workdir_prompt() {
   if confirm_yes_no "Delete work directory ($WORK_DIR)?" 1; then
     rm -rf -- "$WORK_DIR"
-    log "Work directory deleted."
+    success "Work directory deleted."
   else
     log "Work directory kept."
   fi
@@ -404,16 +550,17 @@ prepare_iso_for_os() {
 }
 
 main() {
+  init_ui
   require_tools
   init_base_urls
   ensure_workdir
 
-  log "KMOS USB Flasher"
-  log "Work directory: $WORK_DIR"
+  print_banner
   log ""
+  detail "Work dir" "$WORK_DIR"
 
   local os_choice=""
-  log "Choose operating system"
+  section "Choose Operating System"
   printf '  1) Arch Linux (default)\n' >&2
   printf '  2) Rocky Linux\n' >&2
   while true; do
@@ -426,20 +573,29 @@ main() {
   done
 
   local os_key
+  local os_label
   if [[ "$os_choice" == "1" ]]; then
     os_key="arch"
+    os_label="Arch Linux"
   else
     os_key="rocky"
+    os_label="Rocky Linux"
   fi
+  detail "Selected OS" "$os_label"
 
   local iso_path
+  advance_step "Preparing installation media"
   iso_path="$(prepare_iso_for_os "$os_key")"
 
   local target_disk
+  advance_step "Selecting target USB disk"
   target_disk="$(select_target_disk)"
 
+  advance_step "Flashing image to USB"
   flash_iso "$iso_path" "$target_disk"
+  advance_step "Final cleanup"
   cleanup_workdir_prompt
+  final_success "All steps completed."
 }
 
 main "$@"
