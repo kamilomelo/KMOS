@@ -262,7 +262,7 @@ require_root() {
 
 require_tools() {
   local missing=()
-  local tools=(arch-chroot cfdisk findmnt genfstab grep lsblk mkfs.ext4 mkfs.fat mkfs.xfs mount pacstrap sed timedatectl)
+  local tools=(arch-chroot blkid cfdisk findmnt genfstab grep lsblk mkfs.btrfs mkfs.ext4 mkfs.fat mkfs.xfs mount pacstrap partprobe sed timedatectl udevadm)
   local tool
 
   for tool in "${tools[@]}"; do
@@ -474,6 +474,8 @@ choose_partitions() {
 
     if ask_yes_no "Open cfdisk for this disk before selecting partitions?" "no"; then
       cfdisk "$TARGET_DISK"
+      partprobe "$TARGET_DISK" || true
+      udevadm settle || true
       continue
     fi
 
@@ -591,6 +593,7 @@ confirm_install_plan() {
 
 format_and_mount() {
   local boot_fstype=""
+  local detected_root_fstype=""
 
   case "$ROOT_FILESYSTEM" in
     ext4)
@@ -607,15 +610,26 @@ format_and_mount() {
       ;;
   esac
 
+  partprobe "$TARGET_DISK" || true
+  udevadm settle || true
+  detected_root_fstype="$(blkid -o value -s TYPE "$ROOT_PARTITION" 2>/dev/null || true)"
+  [[ "$detected_root_fstype" == "$ROOT_FILESYSTEM" ]] || die "Expected $ROOT_PARTITION to be formatted as $ROOT_FILESYSTEM, but detected: ${detected_root_fstype:-unknown}"
+
   boot_fstype="$(partition_fstype "$BOOT_PARTITION")"
   if [[ "$boot_fstype" != "vfat" ]]; then
     warn "$BOOT_PARTITION is not vfat. It must be an EFI system partition for this installer."
     read -r -p "Type FORMAT-BOOT to format it as FAT32, or anything else to stop: " confirm
     [[ "$confirm" == "FORMAT-BOOT" ]] || die "Boot partition was not formatted."
     mkfs.fat -F 32 "$BOOT_PARTITION"
+    partprobe "$TARGET_DISK" || true
+    udevadm settle || true
   fi
 
-  mount "$ROOT_PARTITION" "$MOUNT_POINT"
+  if findmnt -rn "$MOUNT_POINT" >/dev/null 2>&1; then
+    umount -R "$MOUNT_POINT" || die "$MOUNT_POINT is already mounted and could not be unmounted."
+  fi
+
+  mount -t "$ROOT_FILESYSTEM" "$ROOT_PARTITION" "$MOUNT_POINT"
   mount --mkdir "$BOOT_PARTITION" "$MOUNT_POINT/boot"
   success "Mounted / and /boot."
   findmnt "$MOUNT_POINT" >&2
