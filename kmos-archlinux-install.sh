@@ -277,18 +277,72 @@ verify_boot_mode() {
 }
 
 select_disk() {
-  local disk=""
+  local default_disk=""
+  local name=""
+  local type=""
+  local tran=""
+  local rm=""
+  local hotplug=""
+  local idx=0
+  local choice=""
+  local -a candidates=()
+  local -a fallback=()
+  local -a selectable=()
 
+  while read -r name type tran rm hotplug; do
+    [[ "$type" == "disk" ]] || continue
+    [[ "$name" == /dev/loop* ]] && continue
+    fallback+=("$name")
+
+    if [[ "$tran" == "usb" || "$rm" == "1" || "$hotplug" == "1" ]]; then
+      continue
+    fi
+    candidates+=("$name")
+  done < <(lsblk -dnpr -o NAME,TYPE,TRAN,RM,HOTPLUG)
+
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    candidates=("${fallback[@]}")
+  fi
+
+  [[ ${#candidates[@]} -gt 0 ]] || die "No installable disk detected."
+
+  default_disk="${candidates[0]}"
+  selectable=("${candidates[@]}")
+
+  if [[ ${#candidates[@]} -eq 1 ]]; then
+    TARGET_DISK="$default_disk"
+    success "Autodetected install disk: $TARGET_DISK"
+    return 0
+  fi
+
+  info "Multiple candidate disks detected."
+  detail "Default" "$default_disk"
   info "Available disks:"
-  lsblk -d -p -o NAME,SIZE,MODEL,TYPE,TRAN >&2
+  for idx in "${!selectable[@]}"; do
+    printf '  %d) ' "$((idx + 1))" >&2
+    lsblk -d -p -o NAME,SIZE,MODEL,TYPE,TRAN,RM,HOTPLUG "${selectable[$idx]}" >&2
+  done
+
+  if [[ ${#fallback[@]} -gt ${#selectable[@]} ]]; then
+    warn "USB/removable disks were hidden from the default list."
+    if ask_yes_no "Show USB/removable disks too?" "no"; then
+      selectable=("${fallback[@]}")
+      info "All non-loop disks:"
+      for idx in "${!selectable[@]}"; do
+        printf '  %d) ' "$((idx + 1))" >&2
+        lsblk -d -p -o NAME,SIZE,MODEL,TYPE,TRAN,RM,HOTPLUG "${selectable[$idx]}" >&2
+      done
+    fi
+  fi
 
   while true; do
-    read -r -p "Target disk for Arch Linux: " disk
-    if [[ -b "$disk" && "$(lsblk -dnro TYPE "$disk" 2>/dev/null)" == "disk" ]]; then
-      TARGET_DISK="$disk"
+    read -r -p "Select target disk [1-${#selectable[@]}] (default: 1): " choice
+    choice="${choice:-1}"
+    if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#selectable[@]})); then
+      TARGET_DISK="${selectable[$((choice - 1))]}"
       return 0
     fi
-    warn "$disk is not a valid disk."
+    warn "Invalid disk selection."
   done
 }
 
@@ -303,32 +357,33 @@ partition_fstype() {
 }
 
 detect_boot_partition() {
+  local -n out_candidates="$1"
   local name=""
   local type=""
   local fstype=""
   local parttype=""
 
+  out_candidates=()
   while read -r name type; do
     [[ "$type" == "part" ]] || continue
     fstype="$(partition_fstype "$name")"
     parttype="$(lsblk -dnro PARTTYPE "$name" 2>/dev/null || true)"
     if [[ "$fstype" == "vfat" || "$parttype" == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" ]]; then
-      printf '%s\n' "$name"
-      return 0
+      out_candidates+=("$name")
     fi
   done < <(lsblk -rpno NAME,TYPE "$TARGET_DISK")
-
-  return 1
 }
 
 detect_root_partition() {
+  local -n out_candidates="$1"
+  local boot_partition="${2:-}"
   local name=""
   local type=""
   local fstype=""
   local parttype=""
   local mountpoints=""
-  local boot_partition="${1:-}"
 
+  out_candidates=()
   while read -r name type; do
     [[ "$type" == "part" ]] || continue
     fstype="$(partition_fstype "$name")"
@@ -336,18 +391,89 @@ detect_root_partition() {
     mountpoints="$(lsblk -dnro MOUNTPOINTS "$name" 2>/dev/null || true)"
     [[ "$name" == "$boot_partition" ]] && continue
     [[ "$parttype" == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" ]] && continue
-    [[ "$fstype" == "swap" ]] && continue
     [[ -n "$mountpoints" ]] && continue
-    printf '%s\n' "$name"
+    case "$fstype" in
+      ext4|xfs|btrfs) out_candidates+=("$name") ;;
+    esac
   done < <(lsblk -rpno NAME,TYPE "$TARGET_DISK" | sort)
 }
 
-choose_partitions() {
-  local suggested_boot=""
-  local suggested_root=""
-  local boot_input=""
-  local root_input=""
+pick_from_candidates() {
+  local label="$1"
+  local default_value="$2"
+  shift 2
+  local candidates=("$@")
+  local idx=1
+  local choice=""
 
+  for idx in "${!candidates[@]}"; do
+    printf '  %d) %s\n' "$((idx + 1))" "${candidates[$idx]}" >&2
+  done
+
+  while true; do
+    read -r -p "$label [1-${#candidates[@]}] or path: " choice
+    if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#candidates[@]})); then
+      printf '%s\n' "${candidates[$((choice - 1))]}"
+      return 0
+    fi
+    if [[ -b "$choice" ]]; then
+      printf '%s\n' "$choice"
+      return 0
+    fi
+    warn "Invalid selection."
+  done
+}
+
+select_boot_partition() {
+  local boot_candidates=()
+  local default_boot=""
+
+  detect_boot_partition boot_candidates
+  if [[ ${#boot_candidates[@]} -eq 0 ]]; then
+    warn "No EFI partition was auto-detected."
+    read -r -p "Enter boot partition for /boot: " BOOT_PARTITION
+    return
+  fi
+
+  if [[ ${#boot_candidates[@]} -ge 2 ]]; then
+    default_boot="${boot_candidates[1]}"
+  else
+    default_boot="${boot_candidates[0]}"
+  fi
+
+  detail "Boot guess" "$default_boot"
+  if ask_yes_no "Use this boot partition?" "yes"; then
+    BOOT_PARTITION="$default_boot"
+    return
+  fi
+
+  info "EFI partition candidates:"
+  BOOT_PARTITION="$(pick_from_candidates "Choose /boot partition" "$default_boot" "${boot_candidates[@]}")"
+}
+
+select_root_partition() {
+  local root_candidates=()
+  local default_root=""
+
+  detect_root_partition root_candidates "$BOOT_PARTITION"
+  if [[ ${#root_candidates[@]} -eq 0 ]]; then
+    warn "No Linux filesystem partition (ext4/xfs/btrfs) was auto-detected."
+    read -r -p "Enter root partition for /: " ROOT_PARTITION
+    return
+  fi
+
+  default_root="${root_candidates[$((${#root_candidates[@]} - 1))]}"
+  detail "Root guess" "$default_root"
+  if ask_yes_no "Use this root partition?" "yes"; then
+    ROOT_PARTITION="$default_root"
+    return
+  fi
+
+  info "Linux root partition candidates:"
+  ROOT_PARTITION="$(pick_from_candidates "Choose / partition" "$default_root" "${root_candidates[@]}")"
+}
+
+choose_partitions() {
   while true; do
     info "Current partition layout:"
     lsblk -fp "$TARGET_DISK" >&2
@@ -357,16 +483,8 @@ choose_partitions() {
       continue
     fi
 
-    suggested_boot="$(detect_boot_partition || true)"
-    suggested_root="$(detect_root_partition "$suggested_boot" | tail -n 1 || true)"
-
-    [[ -n "$suggested_boot" ]] && detail "Boot guess" "$suggested_boot"
-    [[ -n "$suggested_root" ]] && detail "Root guess" "$suggested_root"
-
-    read -r -p "Boot partition for /boot [${suggested_boot:-manual}]: " boot_input
-    BOOT_PARTITION="${boot_input:-$suggested_boot}"
-    read -r -p "Root partition for / [${suggested_root:-manual}]: " root_input
-    ROOT_PARTITION="${root_input:-$suggested_root}"
+    select_boot_partition
+    select_root_partition
 
     if validate_partitions; then
       return 0
