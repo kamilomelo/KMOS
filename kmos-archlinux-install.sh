@@ -5,8 +5,13 @@
 
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 MOUNT_POINT="/mnt"
 WIFI_HANDOFF_DIR="/run/kmos/wifi"
+BASAL_METAPACKAGE_DIR="$SCRIPT_DIR/metapackages/basal"
+STARSHIP_PRESET_DIR="$SCRIPT_DIR/assets/starship-presets"
+STARSHIP_PRESET_MODE="filled"
+STARSHIP_PRESET_THEME="dark"
 STEP_INDEX=0
 STEP_TOTAL=8
 
@@ -215,6 +220,23 @@ add_package() {
   BASE_PACKAGES+=("$package")
 }
 
+load_basal_metapackage() {
+  local pkgbuild="$BASAL_METAPACKAGE_DIR/PKGBUILD"
+  local package=""
+
+  if [[ ! -r "$pkgbuild" ]]; then
+    warn "Basal metapackage not found: $pkgbuild"
+    return 0
+  fi
+
+  while IFS= read -r package; do
+    [[ -n "$package" ]] || continue
+    add_package "$package"
+  done < <(source "$pkgbuild"; printf '%s\n' "${depends[@]}")
+
+  success "Basal metapackage loaded."
+}
+
 prompt_default() {
   local prompt="$1"
   local default="$2"
@@ -290,7 +312,7 @@ require_root() {
 
 require_tools() {
   local missing=()
-  local tools=(arch-chroot blkid cat cfdisk chmod dd findmnt genfstab grep install ln lsblk mkdir mkfs.fat mount pacstrap partprobe rm rmdir sed sort timedatectl udevadm umount)
+  local tools=(arch-chroot blkid cat cfdisk chmod dd dirname findmnt genfstab grep install ln lsblk mkdir mkfs.fat mount pacstrap partprobe rm rmdir sed sort timedatectl touch udevadm umount)
   local tool
 
   for tool in "${tools[@]}"; do
@@ -642,6 +664,7 @@ collect_system_config() {
       ;;
     *) die "Unsupported root filesystem: $ROOT_FILESYSTEM" ;;
   esac
+  load_basal_metapackage
   collect_krub_config
   collect_wifi_boot_config
   SWAPFILE_SIZE="$(prompt_default "Swap file size, or 0 to skip" "$SWAPFILE_SIZE")"
@@ -679,7 +702,9 @@ confirm_install_plan() {
   detail "Root fs" "$ROOT_FILESYSTEM"
   detail "Bootloader" "$KRUB_ID"
   detail "OS detection" "$ENABLE_OS_PROBER"
+  detail "Metapackage" "basal"
   detail "SSH" "enabled"
+  detail "Starship" "$STARSHIP_PRESET_MODE/$STARSHIP_PRESET_THEME"
   if [[ "$ENABLE_WIFI_AFTER_BOOT" == "yes" ]]; then
     detail "Wi-Fi boot" "$WIFI_ADAPTER -> $WIFI_SSID"
   else
@@ -767,9 +792,36 @@ install_base_system() {
   success "Base system installed and fstab generated."
 }
 
+configure_pacman() {
+  local pacman_conf="$MOUNT_POINT/etc/pacman.conf"
+
+  if [[ ! -f "$pacman_conf" ]]; then
+    warn "Could not find target pacman.conf."
+    return 0
+  fi
+
+  sed -i 's/^#Color$/Color/' "$pacman_conf"
+
+  if grep -q '^#ParallelDownloads = ' "$pacman_conf"; then
+    sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 9/' "$pacman_conf"
+  elif grep -q '^ParallelDownloads = ' "$pacman_conf"; then
+    sed -i 's/^ParallelDownloads = .*/ParallelDownloads = 9/' "$pacman_conf"
+  else
+    printf '\nParallelDownloads = 9\n' >> "$pacman_conf"
+  fi
+
+  if ! grep -q '^ILoveCandy$' "$pacman_conf"; then
+    sed -i '/^ParallelDownloads = 9$/a ILoveCandy' "$pacman_conf"
+  fi
+
+  success "Pacman configured."
+}
+
 configure_target_system() {
   local user=""
   local index=0
+
+  configure_pacman
 
   arch-chroot "$MOUNT_POINT" ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
   arch-chroot "$MOUNT_POINT" hwclock --systohc
@@ -805,6 +857,8 @@ configure_target_system() {
 SUDOERS
 
   configure_ssh
+  install_kmos_assets
+  configure_starship_bash
   configure_wifi_after_boot
   create_swapfile
   unset ROOT_PASSWORD PRIMARY_PASSWORD WIFI_PASSWORD
@@ -868,6 +922,50 @@ SSHD_CONFIG
 
   arch-chroot "$MOUNT_POINT" systemctl enable sshd.service
   success "OpenSSH enabled for first boot."
+}
+
+install_kmos_assets() {
+  local preset=""
+
+  if [[ -r "$BASAL_METAPACKAGE_DIR/PKGBUILD" ]]; then
+    install -Dm0644 "$BASAL_METAPACKAGE_DIR/PKGBUILD" "$MOUNT_POINT/usr/share/kmos/metapackages/basal/PKGBUILD"
+  fi
+
+  if [[ -d "$STARSHIP_PRESET_DIR" ]]; then
+    install -d -m 0755 "$MOUNT_POINT/usr/share/kmos/starship-presets"
+    for preset in "$STARSHIP_PRESET_DIR"/*.toml; do
+      [[ -e "$preset" ]] || continue
+      install -m 0644 "$preset" "$MOUNT_POINT/usr/share/kmos/starship-presets/${preset##*/}"
+    done
+  fi
+}
+
+configure_starship_bash() {
+  local preset="$STARSHIP_PRESET_DIR/$STARSHIP_PRESET_MODE-$STARSHIP_PRESET_THEME.toml"
+  local bashrc="$MOUNT_POINT/etc/bash.bashrc"
+
+  if [[ ! -r "$preset" ]]; then
+    warn "Starship preset not found: $preset"
+    return 0
+  fi
+
+  install -Dm0644 "$preset" "$MOUNT_POINT/etc/starship.toml"
+  install -Dm0644 /dev/stdin "$MOUNT_POINT/etc/profile.d/10-kmos-starship.sh" <<'STARSHIP_PROFILE'
+export STARSHIP_CONFIG=/etc/starship.toml
+STARSHIP_PROFILE
+
+  touch "$bashrc"
+  if ! grep -q 'starship init bash' "$bashrc"; then
+    cat >> "$bashrc" <<'BASHRC'
+
+# KMOS Starship prompt
+if [[ $- == *i* ]] && command -v starship >/dev/null 2>&1; then
+  eval "$(starship init bash)"
+fi
+BASHRC
+  fi
+
+  success "Starship configured for Bash."
 }
 
 wpa_quote() {

@@ -1,0 +1,18 @@
+# Maintainer: Kamilo Melo
+pkgname=basal
+pkgver=2026.05.03
+pkgrel=1
+pkgdesc="KMOS basal command-line package set"
+arch=('any')
+url="https://github.com/kamilomelo/KMOS"
+license=('MIT')
+depends=(
+  'bash'
+  'btop'
+  'fastfetch'
+  'starship'
+)
+
+package() {
+  :
+}
