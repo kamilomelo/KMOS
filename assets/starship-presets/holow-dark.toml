@@ -1,56 +1,400 @@
 '$schema' = 'https://starship.rs/config-schema.json'
 
+# === Format ==============================================
+# =========================================================
+
 format = """
+[ ░▒▓█$sudo█▓▒░ ](backa)\
 $username\
+${custom.cpu_temp}\
+$time\
+$os\
+[❯ ](fg:backa bg:backe)\
 $hostname\
-$directory\
+$localip\
+[❯ ](fg:backe bg:backi)\
+$shell\
+$shlvl\
+[❯ ](fg:backi bg:backo)\
 $git_branch\
 $git_status\
-$cmd_duration\
+$git_commit\
+$git_metrics\
+$package\
+$c\
+$cpp\
+$golang\
+$julia\
+$nodejs\
+$rust\
+$typst\
+$python\
+$conda\
+$docker_context\
+$container\
+[❯ ](fg:backo bg:backu)\
+$directory\
+$battery\
+$env_var\
+[❯ ](fg:backu)\
 $line_break\
-$character"""
+$character\
+[](fg:texto)\
+$cmd_duration
+"""
 
 add_newline = false
-palette = 'holow_dark'
 
-[palettes.holow_dark]
-fg0 = '#eceff4'
-fg1 = '#d8dee9'
-blue = '#81a1c1'
-green = '#a3be8c'
-yellow = '#ebcb8b'
+# === Color palette =======================================
+# From https://www.nordtheme.com
+# =========================================================
+
+palette = 'km_darkbkg'
+
+[palettes.km_darkbkg]
+texti  = '#d2d2d2'
+texto  = '#1e1e1e'
+backa  = 'none'
+backe  = 'none'
+backi  = 'none'
+backo  = 'none'
+backu  = 'none'
+
+black = '#000000'
+gray = '#757575'
+white = '#ffffff'
 red = '#bf616a'
+orange = '#d08770'
+yellow = '#ebcb8b'
+green = '#a3be8c'
+purple = '#b48ead'
+foam = '#8fbcbb'
+teal = '#88c0d0'
+steel = '#81a1c1'
+blue = '#5e81ac'
+
+# === Modules =============================================
+# =========================================================
 
 [username]
+disabled = false
 show_always = true
-style_user = 'fg:fg0'
-style_root = 'fg:red bold'
-format = '[$user]($style) '
+style_user = 'fg:texto bg:backa'
+style_root = 'fg:texto bg:backa'
+format = '[ ]($style)[$user ]($style)' # ,  
+
+[sudo]
+disabled = false
+symbol = '  '#  󰌆
+style = 'fg:black bg:yellow'
+format = '[ $symbol ]($style)'
+
+[time]
+disabled = false
+time_format = '%R'
+style = 'fg:texto bg:backa'
+format = '[ $time ]($style)'
+
+[os]
+disabled = false
+style = 'fg:texto bg:backa'
+format = '[$symbol]($style)'
+
+[os.symbols]
+Arch = '󰣇 '
+RockyLinux = ' '
+Debian = '󰣚 '   # Below, suboptimal diestros
+Windows = ' '
+Android = ' '
+Linux = '󰌽 ' # Below, what?
+Ubuntu = ' '
+
+# =========================================================
 
 [hostname]
-ssh_only = false
-style = 'fg:fg1'
-format = '[@$hostname]($style) '
+disabled = false
+ssh_only = true
+ssh_symbol =  ' ' # other options 󰣀 󱘖
+style = 'fg:texto bg:backe'
+format = '[$ssh_symbol ]($style)[$hostname ]($style)'
 
-[directory]
-style = 'fg:blue bold'
-format = '[$path]($style) '
-truncation_length = 3
-truncate_to_repo = false
+[localip]
+disabled = false
+ssh_only = true
+style = 'fg:texto bg:backe'
+format = '[$localipv4 ]($style)'
+
+# =========================================================
+
+[shell]
+disabled = false
+bash_indicator = '  bash'
+zsh_indicator = '  zsh'
+fish_indicator = '  fish'
+powershell_indicator = '  psh'
+unknown_indicator = '  shell'
+style = 'fg:texto bg:backi'
+format = '[$indicator ]($style)'
+
+[shlvl]
+disabled = false
+threshold = 2
+symbol = ' '
+style = 'fg:texto bg:backi blink'
+format = '[$symbol$shlvl ]($style)'
+
+# =========================================================
 
 [git_branch]
-style = 'fg:green'
-format = '[$branch]($style) '
+disabled = false
+symbol = ' '
+style = 'fg:yellow bg:backo'
+format = '[$symbol $branch ]($style)'
 
 [git_status]
-style = 'fg:yellow'
-format = '[$all_status$ahead_behind]($style) '
+disabled = false
+style = 'fg:yellow bg:backo'
+format = '[($all_status $ahead_behind )]($style)'
 
-[cmd_duration]
-min_time = 1000
-style = 'fg:yellow'
-format = '[$duration]($style) '
+[git_commit]
+disabled = false
+tag_disabled = false
+only_detached = false
+style = 'fg:gray bg:backo'
+commit_hash_length = 3
+tag_symbol = '  '
+format = '[\( $hash$tag \) ]($style)'
+
+[git_metrics]
+disabled = false
+only_nonzero_diffs = false
+added_style = 'fg:blue bg:backo'
+deleted_style = 'fg:red bg:backo'
+format = '[+$added:]($added_style)[-$deleted ]($deleted_style)'
+
+# =========================================================
+
+[package]
+disabled = false
+symbol = ' '
+style = 'fg:green bg:backo'
+format = '[$symbol$version ]($style)'
+
+# =========================================================
+
+[c]
+disabled = false
+symbol = ' '
+style = 'fg:steel bg:backo'
+format = '[$symbol$version ]($style)'
+
+[cpp]
+disabled = false
+symbol = ' '
+style = 'fg:steel bg:backo'
+format = '[$symbol$version ]($style)'
+
+[golang]
+disabled = false
+symbol = ' '
+style = 'fg:steel bg:backo'
+format = '[$symbol$version ]($style)'
+
+[julia]
+disabled = false
+symbol = ' '
+style = 'fg:steel bg:backo'
+format = '[$symbol$version ]($style)'
+
+[nodejs]
+disabled = false
+symbol = ' '
+style = 'fg:steel bg:backo'
+format = '[$symbol$version ]($style)'
+
+[rust]
+disabled = false
+symbol = ' '
+style = 'fg:steel bg:backo'
+format = '[$symbol$version ]($style)'
+
+[typst]
+disabled = false
+symbol = ' '
+style = 'fg:steel bg:backo'
+format = '[$symbol$version ]($style)'
+
+[python]
+disabled = false
+symbol = ' '
+style = 'fg:steel bg:backo'
+format = '[$symbol$version (\(#$virtualenv\) )]($style)'
+
+# =========================================================
+
+[conda]
+symbol = ' '
+style = 'fg:teal bg:backo'
+format = '[($symbol$environment )]($style)'
+ignore_base = false
+
+# =========================================================
+
+[docker_context]
+disabled = false
+symbol = ' '
+style = 'fg:foam bg:backo'
+only_with_files = false
+format = '[($symbol $context )]($style)'
+
+[container]
+disabled = false
+symbol = ' '
+style = 'fg:blue bg:backo'
+format = '[($symbol $name )]($style)'
+
+# =========================================================
+
+[directory]
+disabled = false
+truncation_length = 3
+truncation_symbol = '•••/'
+home_symbol = ' '
+read_only = ' '
+read_only_style = 'fg:red bg:backu'
+style = 'fg:texto bg:backu'
+format = '[($read_only)]($read_only_style)[$path ]($style)'
+
+[directory.substitutions]
+'kDrive' = 'KM  '
+'KM-RoBoTa-Drive' = 'KM-R  '
+'KM-RoBoTa' = 'KM-R  '
+'accounting and finance' = ' '
+'human resources' = ' '
+'management' = ' '
+'operations' = ' '
+'research and development' = ' '
+'sales and marketing' = ' '
+
+'Documents' = ' '
+'Downloads' = ' '
+'Music' = ' '
+'Pictures' = ' '
+'Repository' = ' '
+
+# === Battery status ======================================
+# =========================================================
+
+[battery]
+disabled = false
+full_symbol = ' '
+charging_symbol = ' '
+empty_symbol = '   '
+format = '[$symbol$percentage ]($style)'
+
+[[battery.display]]
+threshold = 81
+style = 'fg:green bg:backu'
+discharging_symbol = ' '
+
+[[battery.display]]
+threshold = 72
+style = 'fg:yellow bg:backu'
+discharging_symbol = ' '
+
+[[battery.display]]
+threshold = 63
+style = 'fg:orange bg:backu'
+discharging_symbol = ' '
+
+[[battery.display]]
+threshold = 54
+style = 'fg:orange bg:backu'
+discharging_symbol = ' '
+
+[[battery.display]]
+threshold = 45
+style = 'fg:red bg:backu'
+discharging_symbol = ' '
+
+[[battery.display]]
+threshold = 36
+style = 'fg:red bg:backu'
+discharging_symbol = ' '
+
+[[battery.display]]
+threshold = 27
+style = 'fg:red bg:backu'
+discharging_symbol = '  '
+
+# === Line break and character ============================
+# =========================================================
+
+[line_break]
+disabled = true
 
 [character]
-success_symbol = '[>](bold green)'
-error_symbol = '[>](bold red)'
+disabled = false
+success_symbol = '[  ](bold fg:green)'
+error_symbol = '[  ](bold fg:red)'
+vimcmd_symbol = '[  ](bold fg:green)'
+vimcmd_replace_one_symbol = '[  ](bold fg:purple)'
+vimcmd_replace_symbol = '[  ](bold fg:purple)'
+vimcmd_visual_symbol = '[  ](bold fg:yellow)'
+
+[cmd_duration]
+disabled = false
+show_milliseconds = true
+show_notifications = true
+min_time = 3_000
+min_time_to_notify = 60_000
+style = 'fg:gray'
+format = '[ $duration  ]($style)'
+
+# === Custom Modules ======================================
+# =========================================================
+
+[custom.cpu_temp]
+disabled = false
+command = """
+sensors | grep 'Core' | awk '
+{
+  t = $3
+  n = t
+  gsub(/\\+|°C/, "", n)
+
+  # Do not show anything if below 60°C
+  if (n < 60) {
+    exit
+  }
+
+  if (n < 64) {
+    icon = " "
+    color = "\\033[38;2;48;48;48m"   # texto
+  } else if (n < 68) {
+    icon = " "
+    color = "\\033[38;2;143;188;187m"   # foam
+  } else if (n < 72) {
+    icon = " "
+    color = "\\033[38;2;163;190;140m"   # green
+  } else if (n < 76) {
+    icon = " "
+    color = "\\033[38;2;235;203;139m"   # yellow
+  } else if (n < 80) {
+    icon = " "
+    color = "\\033[38;2;208;135;112m"   # orange
+  } else {
+    icon = " "
+    color = "\\033[38;2;191;97;106m"    # red
+  }
+
+  printf "%s%s %s\\033[39m\\n", color, icon, t
+  exit
+}
+'
+"""
+when = 'true'
+style = 'bg:backa'
+format = '[($output )]($style)'
+
+# =========================================================
