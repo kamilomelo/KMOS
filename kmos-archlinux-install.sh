@@ -13,6 +13,7 @@ KDE_INSTALLER_URL="https://raw.githubusercontent.com/kamilomelo/KMOS/main/kmos-k
 STARSHIP_PRESET_DIR="$SCRIPT_DIR/assets/starship-presets"
 STARSHIP_PRESET_MODE="holow"
 STARSHIP_PRESET_THEME="light"
+DEBUG_MODE="${KMOS_DEBUG:-0}"
 STEP_INDEX=0
 STEP_TOTAL=9
 
@@ -123,6 +124,22 @@ init_ui() {
 
 log() {
   printf '%s\n' "$*" >&2
+}
+
+run_cmd() {
+  local output=""
+  local rc=0
+
+  if [[ "$DEBUG_MODE" == "1" ]]; then
+    "$@"
+    return $?
+  fi
+
+  output="$("$@" 2>&1)" || rc=$?
+  if ((rc != 0)); then
+    [[ -n "$output" ]] && printf '%s\n' "$output" >&2
+    return "$rc"
+  fi
 }
 
 info() {
@@ -857,20 +874,20 @@ format_and_mount() {
 
   case "$ROOT_FILESYSTEM" in
     ext4)
-      mkfs.ext4 -F "$ROOT_PARTITION"
+      run_cmd mkfs.ext4 -F "$ROOT_PARTITION"
       ;;
     xfs)
-      mkfs.xfs -f "$ROOT_PARTITION"
+      run_cmd mkfs.xfs -f "$ROOT_PARTITION"
       ;;
     btrfs)
-      mkfs.btrfs -f "$ROOT_PARTITION"
+      run_cmd mkfs.btrfs -f "$ROOT_PARTITION"
       ;;
     *)
       die "Unsupported root filesystem for this first version: $ROOT_FILESYSTEM"
       ;;
   esac
 
-  partprobe "$TARGET_DISK" || true
+  run_cmd partprobe "$TARGET_DISK" || true
   udevadm settle || true
   detected_root_fstype="$(blkid -o value -s TYPE "$ROOT_PARTITION" 2>/dev/null || true)"
   [[ "$detected_root_fstype" == "$ROOT_FILESYSTEM" ]] || die "Expected $ROOT_PARTITION to be formatted as $ROOT_FILESYSTEM, but detected: ${detected_root_fstype:-unknown}"
@@ -880,14 +897,14 @@ format_and_mount() {
     warn "$BOOT_PARTITION is not vfat. It must be an EFI system partition for this installer."
     read -r -p "Type FORMAT-BOOT to format it as FAT32, or anything else to stop: " confirm
     [[ "$confirm" == "FORMAT-BOOT" ]] || die "Boot partition was not formatted."
-    mkfs.fat -F 32 "$BOOT_PARTITION"
-    partprobe "$TARGET_DISK" || true
+    run_cmd mkfs.fat -F 32 "$BOOT_PARTITION"
+    run_cmd partprobe "$TARGET_DISK" || true
     udevadm settle || true
   fi
 
   # Reused EFI partitions can carry FAT metadata issues that only surface later
   # during initramfs/grub writes. Repair/check before mounting.
-  fsck.fat -a "$BOOT_PARTITION" || fsck_rc=$?
+  run_cmd fsck.fat -a "$BOOT_PARTITION" || fsck_rc=$?
   # fsck.fat exit codes: 0 (clean), 1 (errors corrected) are acceptable.
   if ((fsck_rc > 1)); then
     die "EFI partition check failed on $BOOT_PARTITION (fsck.fat rc=$fsck_rc). Repair it manually before continuing."
@@ -897,11 +914,13 @@ format_and_mount() {
     umount -R "$MOUNT_POINT" || die "$MOUNT_POINT is already mounted and could not be unmounted."
   fi
 
-  mount -t "$ROOT_FILESYSTEM" "$ROOT_PARTITION" "$MOUNT_POINT"
-  mount --mkdir "$BOOT_PARTITION" "$MOUNT_POINT/boot"
+  run_cmd mount -t "$ROOT_FILESYSTEM" "$ROOT_PARTITION" "$MOUNT_POINT"
+  run_cmd mount --mkdir "$BOOT_PARTITION" "$MOUNT_POINT/boot"
   verify_boot_writable
   success "Mounted / and /boot."
-  findmnt "$MOUNT_POINT" >&2
+  if [[ "$DEBUG_MODE" == "1" ]]; then
+    findmnt "$MOUNT_POINT" >&2
+  fi
 }
 
 verify_boot_writable() {
@@ -921,9 +940,11 @@ verify_boot_writable() {
 }
 
 setup_time() {
-  timedatectl set-timezone "$TIMEZONE"
-  timedatectl set-ntp true
-  timedatectl status
+  run_cmd timedatectl set-timezone "$TIMEZONE"
+  run_cmd timedatectl set-ntp true
+  if [[ "$DEBUG_MODE" == "1" ]]; then
+    timedatectl status
+  fi
 }
 
 install_base_system() {
@@ -1025,6 +1046,7 @@ SUDOERS
   install_kmos_assets
   configure_starship_bash
   configure_wifi_after_boot
+  configure_wired_network_after_boot
   create_swapfile
   unset ROOT_PASSWORD PRIMARY_PASSWORD WIFI_PASSWORD
   EXTRA_PASSWORDS=()
@@ -1185,6 +1207,13 @@ WIFI_LINK
   rm -f "$WIFI_HANDOFF_DIR/adapter" "$WIFI_HANDOFF_DIR/ssid" "$WIFI_HANDOFF_DIR/password" "$WIFI_HANDOFF_DIR/hidden"
   rmdir "$WIFI_HANDOFF_DIR" 2>/dev/null || true
   success "Wi-Fi configured for first boot."
+}
+
+configure_wired_network_after_boot() {
+  [[ "$ENABLE_WIFI_AFTER_BOOT" == "yes" ]] && return 0
+
+  arch-chroot "$MOUNT_POINT" systemctl enable dhcpcd.service
+  success "Wired DHCP enabled for first boot."
 }
 
 create_swapfile() {
