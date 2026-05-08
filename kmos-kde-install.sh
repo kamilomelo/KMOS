@@ -389,6 +389,10 @@ enable_kde_services() {
     arch-chroot "$MOUNT_POINT" systemctl enable cups.service
   fi
 
+  if arch-chroot "$MOUNT_POINT" pacman -Q packagekit >/dev/null 2>&1; then
+    arch-chroot "$MOUNT_POINT" systemctl enable packagekit.service
+  fi
+
   if arch-chroot "$MOUNT_POINT" pacman -Q pipewire >/dev/null 2>&1; then
     arch-chroot "$MOUNT_POINT" systemctl --global enable pipewire.socket
   fi

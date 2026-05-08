@@ -1,0 +1,20 @@
+# Maintainer: Kamilo Melo
+pkgname=kmos-deprecated
+pkgver=2026.05.08
+pkgrel=1
+pkgdesc="KMOS deprecated KDE-related package set"
+arch=('any')
+url="https://github.com/kamilomelo/KMOS"
+license=('MIT')
+depends=(
+  'kile'
+  'libreoffice'
+  'simple-scan'
+  'texlive'
+  'xorg-server'
+  'xorg-xinit'
+)
+
+package() {
+  :
+}

@@ -864,8 +864,20 @@ confirm_install_plan() {
   printf '\n%b%s%b\n' "${UI_DANGER}${UI_BOLD}" "Destructive action" "$UI_RESET" >&2
   log "The root partition will be formatted. Data on $ROOT_PARTITION will be erased."
   log "The boot partition will be formatted as FAT32. Data on $BOOT_PARTITION will be erased."
-  read -r -p "Type FORMAT to continue: " confirm
-  [[ "$confirm" == "FORMAT" ]] || die "Install cancelled."
+  while true; do
+    read -r -p "Type FORMAT to continue or EXIT to cancel: " confirm
+    case "$confirm" in
+      FORMAT)
+        break
+        ;;
+      EXIT)
+        die "Install cancelled."
+        ;;
+      *)
+        warn "Type FORMAT to continue or EXIT to cancel."
+        ;;
+    esac
+  done
 }
 
 format_and_mount() {

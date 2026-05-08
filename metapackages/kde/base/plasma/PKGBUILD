@@ -17,6 +17,7 @@ depends=(
   'kdecoration'
   'kglobalacceld'
   'kinfocenter'
+  'kdeplasma-addons'
   'kmenuedit'
   'knighttime'
   'kpipewire'
