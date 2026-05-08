@@ -112,7 +112,7 @@ apply_splash_defaults() {
 }
 
 apply_sddm_defaults() {
-  local target_wallpaper="/usr/share/kmos/assets/KM-R-wallpaper.png"
+  local target_wallpaper="/opt/kmos/assets/KM-R-wallpaper.png"
 
   [[ -r "$ASSET_WALLPAPER" ]] || die "Missing wallpaper asset: $ASSET_WALLPAPER"
 
