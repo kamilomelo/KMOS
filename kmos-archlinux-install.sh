@@ -14,6 +14,7 @@ STARSHIP_PRESET_DIR="$SCRIPT_DIR/assets/starship-presets"
 STARSHIP_PRESET_MODE="holow"
 STARSHIP_PRESET_THEME="light"
 DEBUG_MODE="${KMOS_DEBUG:-0}"
+PACMAN_RETRIES="${KMOS_PACMAN_RETRIES:-4}"
 STEP_INDEX=0
 STEP_TOTAL=9
 
@@ -140,6 +141,27 @@ run_cmd() {
     [[ -n "$output" ]] && printf '%s\n' "$output" >&2
     return "$rc"
   fi
+}
+
+run_with_retry() {
+  local attempts="$1"
+  shift
+  local try=1
+  local delay=4
+
+  while ((try <= attempts)); do
+    if "$@"; then
+      return 0
+    fi
+    if ((try == attempts)); then
+      break
+    fi
+    warn "Command failed (attempt $try/$attempts). Retrying in ${delay}s..."
+    sleep "$delay"
+    ((try += 1))
+  done
+
+  return 1
 }
 
 info() {
@@ -945,9 +967,24 @@ setup_time() {
 }
 
 install_base_system() {
+  local live_pacman_conf="/etc/pacman.conf"
+  local pacman_conf="/tmp/kmos-pacman.conf"
+
   cleanup_boot_artifacts
   info "Installing minimal base packages"
-  pacstrap -K "$MOUNT_POINT" "${BASE_PACKAGES[@]}"
+  cp "$live_pacman_conf" "$pacman_conf"
+  if ! grep -q '^DisableDownloadTimeout$' "$pacman_conf"; then
+    printf '\nDisableDownloadTimeout\n' >> "$pacman_conf"
+  fi
+  if grep -q '^ParallelDownloads = ' "$pacman_conf"; then
+    sed -i 's/^ParallelDownloads = .*/ParallelDownloads = 1/' "$pacman_conf"
+  elif grep -q '^#ParallelDownloads = ' "$pacman_conf"; then
+    sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 1/' "$pacman_conf"
+  else
+    printf 'ParallelDownloads = 1\n' >> "$pacman_conf"
+  fi
+
+  run_with_retry "$PACMAN_RETRIES" pacstrap -C "$pacman_conf" -K "$MOUNT_POINT" "${BASE_PACKAGES[@]}" || die "pacstrap failed after ${PACMAN_RETRIES} attempts."
   genfstab -U "$MOUNT_POINT" >> "$MOUNT_POINT/etc/fstab"
   success "Base system installed and fstab generated."
 }
@@ -1380,7 +1417,7 @@ install_krub_bootloader() {
 }
 
 update_target_system() {
-  arch-chroot "$MOUNT_POINT" pacman -Syyuu --noconfirm
+  run_with_retry "$PACMAN_RETRIES" arch-chroot "$MOUNT_POINT" pacman --disable-download-timeout -Syyuu --noconfirm || die "Target update failed after ${PACMAN_RETRIES} attempts."
   success "Target system updated."
 }
 
@@ -1423,12 +1460,15 @@ offer_power_action() {
   local choice=""
   local countdown=10
   local timed_out=0
+  local tty_ok=0
 
   printf '\n' >&2
   info "What now?"
   log "  1) Reboot"
   log "  2) Shutdown"
-  log "  3) Return to shell"
+  if [[ -r /dev/tty ]]; then
+    tty_ok=1
+  fi
 
   while true; do
     choice=""
@@ -1436,10 +1476,14 @@ offer_power_action() {
     timed_out=1
 
     while ((countdown > 0)); do
-      printf '\rSelect [1-3] (default: 1 in %2ss): ' "$countdown" >&2
-      if read -r -t 1 choice < /dev/tty; then
-        timed_out=0
-        break
+      printf '\rSelect [1-2] (default: 1 in %2ss): ' "$countdown" >&2
+      if ((tty_ok == 1)); then
+        if read -r -t 1 choice < /dev/tty; then
+          timed_out=0
+          break
+        fi
+      else
+        sleep 1
       fi
       ((countdown -= 1))
     done
@@ -1455,12 +1499,13 @@ offer_power_action() {
         final_success "Install complete. Rebooting."
         unmount_target
         sync
-        systemctl reboot >/dev/null 2>&1 || reboot -f || shutdown -r now || {
-          if [[ -w /proc/sysrq-trigger ]]; then
-            printf 'b' > /proc/sysrq-trigger
-          fi
-        }
-        exit 0
+        systemctl reboot -i >/dev/null 2>&1
+        reboot -f
+        shutdown -r now
+        if [[ -w /proc/sysrq-trigger ]]; then
+          printf 'b' > /proc/sysrq-trigger
+        fi
+        die "Unable to reboot automatically."
         ;;
       2)
         final_success "Install complete. Shutting down."
@@ -1468,10 +1513,6 @@ offer_power_action() {
         sync
         systemctl poweroff >/dev/null 2>&1 || shutdown -h now
         exit 0
-        ;;
-      3)
-        final_success "Install complete. Returning to shell."
-        return 0
         ;;
       *)
         warn "Invalid selection."
