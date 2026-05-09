@@ -127,6 +127,20 @@ Parent=FALLBACK/
 EOF
 }
 
+write_konsole_default_profile() {
+  local target="$1"
+
+  install -Dm0644 /dev/stdin "$target" <<'EOF'
+[Appearance]
+ColorScheme=KMOS-Linux
+UseTransparency=true
+
+[General]
+Name=Default
+Parent=FALLBACK/
+EOF
+}
+
 write_konsole_rc() {
   local target="$1"
 
@@ -329,12 +343,15 @@ apply_konsole_defaults() {
 
   install -Dm0644 "$ASSET_KONSOLE_COLOR_SCHEME" "$MOUNT_POINT$TARGET_KONSOLE_COLOR_SCHEME"
   install -Dm0644 "$ASSET_KONSOLE_COLOR_SCHEME" "$MOUNT_POINT/usr/share/konsole/KMOS-Linux.colorscheme"
+  write_konsole_rc "$MOUNT_POINT/etc/xdg/konsolerc"
   write_konsole_profile "$MOUNT_POINT/etc/skel/.local/share/konsole/kmos.profile"
+  write_konsole_default_profile "$MOUNT_POINT/etc/skel/.local/share/konsole/Default.profile"
   install -Dm0644 "$ASSET_KONSOLE_COLOR_SCHEME" "$MOUNT_POINT/etc/skel/.local/share/konsole/KMOS-Linux.colorscheme"
   write_konsole_rc "$MOUNT_POINT/etc/skel/.config/konsolerc"
 
   install -Dm0644 "$ASSET_KONSOLE_COLOR_SCHEME" "$MOUNT_POINT/root/.local/share/konsole/KMOS-Linux.colorscheme"
   write_konsole_profile "$MOUNT_POINT/root/.local/share/konsole/kmos.profile"
+  write_konsole_default_profile "$MOUNT_POINT/root/.local/share/konsole/Default.profile"
   write_konsole_rc "$MOUNT_POINT/root/.config/konsolerc"
 
   if [[ -d "$MOUNT_POINT/home" ]]; then
@@ -342,6 +359,7 @@ apply_konsole_defaults() {
       username="$(basename "$home_dir")"
       install -Dm0644 "$ASSET_KONSOLE_COLOR_SCHEME" "$home_dir/.local/share/konsole/KMOS-Linux.colorscheme"
       write_konsole_profile "$home_dir/.local/share/konsole/kmos.profile"
+      write_konsole_default_profile "$home_dir/.local/share/konsole/Default.profile"
       write_konsole_rc "$home_dir/.config/konsolerc"
       arch-chroot "$MOUNT_POINT" chown -R "$username:$username" "/home/$username/.local" "/home/$username/.config/konsolerc" 2>/dev/null || true
     done < <(find "$MOUNT_POINT/home" -mindepth 1 -maxdepth 1 -type d -print0)
