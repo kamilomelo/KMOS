@@ -10,8 +10,10 @@ MOUNT_POINT="/mnt"
 KDE_PROFILE="${KMOS_KDE_PROFILE:-test}"
 ASSET_WALLPAPER="$SCRIPT_DIR/assets/KM-R-wallpaper.png"
 ASSET_COLOR_SCHEME="$SCRIPT_DIR/assets/color-schemes/KMOS.colors"
+ASSET_KONSOLE_COLOR_SCHEME="$SCRIPT_DIR/assets/konsole/KMOS-Linux.colorscheme"
 TARGET_WALLPAPER="/opt/kmos/assets/KM-R-wallpaper.png"
 TARGET_COLOR_SCHEME="/opt/kmos/assets/color-schemes/KMOS.colors"
+TARGET_KONSOLE_COLOR_SCHEME="/opt/kmos/assets/konsole/KMOS-Linux.colorscheme"
 
 UI_RESET=""
 UI_BOLD=""
@@ -115,9 +117,7 @@ write_konsole_profile() {
 
   install -Dm0644 /dev/stdin "$target" <<'EOF'
 [Appearance]
-ColorScheme=Linux
-UseTransparency=true
-Transparency=27
+ColorScheme=KMOS-Linux
 
 [General]
 Name=kmos
@@ -232,6 +232,12 @@ EOF
 }
 
 apply_application_dashboard_defaults() {
+  local layout_template="$MOUNT_POINT/usr/share/plasma/layout-templates/org.kde.plasma.desktop.defaultPanel/contents/layout.js"
+
+  if [[ -f "$layout_template" ]]; then
+    sed -i 's/org.kde.plasma.kickoff/org.kde.plasma.kickerdash/' "$layout_template"
+  fi
+
   install -Dm0644 /dev/stdin "$MOUNT_POINT/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/zz-kmos-kickerdash.js" <<'EOF'
 var panels = panelIds;
 for (var i = 0; i < panels.length; ++i) {
@@ -248,7 +254,9 @@ for (var i = 0; i < panels.length; ++i) {
         }
 
         if (widget.type === "org.kde.plasma.kicker" || widget.type === "org.kde.plasma.kickoff") {
-            widget.type = "org.kde.plasma.kickerdash";
+            panel.removeWidget(widget);
+            panel.addWidget("org.kde.plasma.kickerdash");
+            break;
         }
     }
 }
@@ -285,15 +293,21 @@ apply_konsole_defaults() {
   local home_dir=""
   local username=""
 
+  [[ -r "$ASSET_KONSOLE_COLOR_SCHEME" ]] || die "Missing Konsole color scheme asset: $ASSET_KONSOLE_COLOR_SCHEME"
+
+  install -Dm0644 "$ASSET_KONSOLE_COLOR_SCHEME" "$MOUNT_POINT$TARGET_KONSOLE_COLOR_SCHEME"
   write_konsole_profile "$MOUNT_POINT/etc/skel/.local/share/konsole/kmos.profile"
+  install -Dm0644 "$ASSET_KONSOLE_COLOR_SCHEME" "$MOUNT_POINT/etc/skel/.local/share/konsole/KMOS-Linux.colorscheme"
   write_konsole_rc "$MOUNT_POINT/etc/skel/.config/konsolerc"
 
+  install -Dm0644 "$ASSET_KONSOLE_COLOR_SCHEME" "$MOUNT_POINT/root/.local/share/konsole/KMOS-Linux.colorscheme"
   write_konsole_profile "$MOUNT_POINT/root/.local/share/konsole/kmos.profile"
   write_konsole_rc "$MOUNT_POINT/root/.config/konsolerc"
 
   if [[ -d "$MOUNT_POINT/home" ]]; then
     while IFS= read -r -d '' home_dir; do
       username="$(basename "$home_dir")"
+      install -Dm0644 "$ASSET_KONSOLE_COLOR_SCHEME" "$home_dir/.local/share/konsole/KMOS-Linux.colorscheme"
       write_konsole_profile "$home_dir/.local/share/konsole/kmos.profile"
       write_konsole_rc "$home_dir/.config/konsolerc"
       arch-chroot "$MOUNT_POINT" chown -R "$username:$username" "/home/$username/.local" "/home/$username/.config/konsolerc" 2>/dev/null || true

@@ -1454,13 +1454,13 @@ offer_power_action() {
       1)
         final_success "Install complete. Rebooting."
         unmount_target
-        reboot
+        systemctl reboot >/dev/null 2>&1 || reboot -f
         return 0
         ;;
       2)
         final_success "Install complete. Shutting down."
         unmount_target
-        shutdown -h now
+        systemctl poweroff >/dev/null 2>&1 || shutdown -h now
         return 0
         ;;
       3)
