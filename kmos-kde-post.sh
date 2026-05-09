@@ -11,6 +11,7 @@ KDE_PROFILE="${KMOS_KDE_PROFILE:-test}"
 ASSET_WALLPAPER="$SCRIPT_DIR/assets/KM-R-wallpaper.png"
 ASSET_COLOR_SCHEME="$SCRIPT_DIR/assets/color-schemes/KMOS.colors"
 ASSET_KONSOLE_COLOR_SCHEME="$SCRIPT_DIR/assets/konsole/KMOS-Linux.colorscheme"
+ASSET_YAKUAKE_SKIN_DIR="$SCRIPT_DIR/assets/yakuake/monochrome"
 TARGET_WALLPAPER="/opt/kmos/assets/KM-R-wallpaper.png"
 TARGET_COLOR_SCHEME="/opt/kmos/assets/color-schemes/KMOS.colors"
 TARGET_KONSOLE_COLOR_SCHEME="/opt/kmos/assets/konsole/KMOS-Linux.colorscheme"
@@ -132,6 +133,21 @@ write_konsole_rc() {
   install -Dm0644 /dev/stdin "$target" <<'EOF'
 [Desktop Entry]
 DefaultProfile=kmos.profile
+EOF
+}
+
+write_yakuake_rc() {
+  local target="$1"
+
+  install -Dm0644 /dev/stdin "$target" <<'EOF'
+[Appearance]
+Skin=monochrome
+SkinInstalledWithKns=false
+
+[Window]
+Width=80
+Height=80
+KeepOpen=false
 EOF
 }
 
@@ -318,6 +334,38 @@ apply_konsole_defaults() {
   success "Konsole defaults configured."
 }
 
+install_yakuake_skin() {
+  local target_system_skin="$MOUNT_POINT/usr/share/yakuake/skins/monochrome"
+  local target_asset_skin="$MOUNT_POINT/opt/kmos/assets/yakuake/monochrome"
+
+  [[ -d "$ASSET_YAKUAKE_SKIN_DIR" ]] || die "Missing Yakuake skin asset directory: $ASSET_YAKUAKE_SKIN_DIR"
+
+  rm -rf "$target_system_skin" "$target_asset_skin"
+  install -d "$MOUNT_POINT/usr/share/yakuake/skins" "$MOUNT_POINT/opt/kmos/assets/yakuake"
+  cp -a "$ASSET_YAKUAKE_SKIN_DIR" "$target_system_skin"
+  cp -a "$ASSET_YAKUAKE_SKIN_DIR" "$target_asset_skin"
+}
+
+apply_yakuake_defaults() {
+  local home_dir=""
+  local username=""
+
+  install_yakuake_skin
+
+  write_yakuake_rc "$MOUNT_POINT/etc/skel/.config/yakuakerc"
+  write_yakuake_rc "$MOUNT_POINT/root/.config/yakuakerc"
+
+  if [[ -d "$MOUNT_POINT/home" ]]; then
+    while IFS= read -r -d '' home_dir; do
+      username="$(basename "$home_dir")"
+      write_yakuake_rc "$home_dir/.config/yakuakerc"
+      arch-chroot "$MOUNT_POINT" chown "$username:$username" "/home/$username/.config/yakuakerc" 2>/dev/null || true
+    done < <(find "$MOUNT_POINT/home" -mindepth 1 -maxdepth 1 -type d -print0)
+  fi
+
+  success "Yakuake defaults configured."
+}
+
 record_profile() {
   install -Dm0644 /dev/stdin "$MOUNT_POINT/usr/share/kmos/kde-profile" <<EOF
 $KDE_PROFILE
@@ -332,6 +380,7 @@ apply_post_tweaks() {
   apply_application_dashboard_defaults
   apply_color_scheme_defaults
   apply_konsole_defaults
+  apply_yakuake_defaults
   record_profile
   success "KDE post-install hook executed."
 }
