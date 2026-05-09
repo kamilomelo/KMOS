@@ -154,6 +154,18 @@ KeepOpen=false
 EOF
 }
 
+write_dolphin_rc() {
+  local target="$1"
+
+  install -Dm0644 /dev/stdin "$target" <<'EOF'
+[General]
+ShowPreview=true
+
+[PreviewSettings]
+Plugins=appimagethumbnail,audiothumbnail,blenderthumbnail,comicbookthumbnail,cursorthumbnail,directorythumbnail,djvuthumbnail,ebookthumbnail,exrthumbnail,ffmpegthumbs,fontthumbnail,glycin-heif,glycin-image-rs,glycin-jxl,glycin-svg,gsthumbnail,heif,imagethumbnail,jpegthumbnail,kraorathumbnail,mltpreview,mobithumbnail,opendocumentthumbnail,rawthumbnail,svgthumbnail,textthumbnail,windowsexethumbnail,windowsimagethumbnail
+EOF
+}
+
 apply_splash_defaults() {
   local home_dir=""
   local username=""
@@ -369,6 +381,25 @@ apply_yakuake_defaults() {
   success "Yakuake defaults configured."
 }
 
+apply_dolphin_defaults() {
+  local home_dir=""
+  local username=""
+
+  write_dolphin_rc "$MOUNT_POINT/etc/xdg/dolphinrc"
+  write_dolphin_rc "$MOUNT_POINT/etc/skel/.config/dolphinrc"
+  write_dolphin_rc "$MOUNT_POINT/root/.config/dolphinrc"
+
+  if [[ -d "$MOUNT_POINT/home" ]]; then
+    while IFS= read -r -d '' home_dir; do
+      username="$(basename "$home_dir")"
+      write_dolphin_rc "$home_dir/.config/dolphinrc"
+      arch-chroot "$MOUNT_POINT" chown "$username:$username" "/home/$username/.config/dolphinrc" 2>/dev/null || true
+    done < <(find "$MOUNT_POINT/home" -mindepth 1 -maxdepth 1 -type d -print0)
+  fi
+
+  success "Dolphin previews enabled by default."
+}
+
 record_profile() {
   install -Dm0644 /dev/stdin "$MOUNT_POINT/usr/share/kmos/kde-profile" <<EOF
 $KDE_PROFILE
@@ -384,6 +415,7 @@ apply_post_tweaks() {
   apply_color_scheme_defaults
   apply_konsole_defaults
   apply_yakuake_defaults
+  apply_dolphin_defaults
   record_profile
   success "KDE post-install hook executed."
 }
