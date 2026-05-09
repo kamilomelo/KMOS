@@ -1499,13 +1499,15 @@ offer_power_action() {
         final_success "Install complete. Rebooting."
         unmount_target
         sync
-        systemctl reboot -i >/dev/null 2>&1
-        reboot -f
-        shutdown -r now
-        if [[ -w /proc/sysrq-trigger ]]; then
-          printf 'b' > /proc/sysrq-trigger
+        if ! systemctl reboot -i >/dev/null 2>&1; then
+          reboot -f >/dev/null 2>&1 || shutdown -r now >/dev/null 2>&1 || {
+            if [[ -w /proc/sysrq-trigger ]]; then
+              printf 'b' > /proc/sysrq-trigger
+            fi
+            die "Unable to reboot automatically."
+          }
         fi
-        die "Unable to reboot automatically."
+        exit 0
         ;;
       2)
         final_success "Install complete. Shutting down."
