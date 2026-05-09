@@ -2,7 +2,7 @@
 # One package per line. Lines starting with # are ignored.
 # Packages are removed only if installed.
 firefox
-noto-fonts
+#noto-fonts
 v4l-utils
 kwrite
 hwloc
