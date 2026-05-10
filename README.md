@@ -1,6 +1,6 @@
-# KMOS
+# kmos
 
-KMOS is a practical Arch Linux installation toolkit.
+kmos is a practical Arch Linux installation toolkit.
 It provides:
 - a USB flasher,
 - a network bootstrap script for Arch ISO,
@@ -16,7 +16,7 @@ Use `kmos-usb-flasher.sh` on a working machine to write the Arch ISO to USB.
 Boot from the flashed USB and open a shell.
 
 ### 3) If Ethernet Is Available
-Connect cable, clone KMOS, and run:
+Connect cable, clone kmos, and run:
 
 ```bash
 git clone https://github.com/kamilomelo/kmos.git
@@ -32,7 +32,7 @@ The installer handles partitioning, base setup, bootloader, and then asks for de
 Use the repository from external media, then run Wi-Fi setup first:
 
 ```bash
-# Example: mount external USB containing the KMOS repo
+# Example: mount external USB containing the kmos repo
 mount /dev/<usb-partition> /mnt
 cd /mnt/<kmos-folder>
 ./kmos-wifi-connect.sh
