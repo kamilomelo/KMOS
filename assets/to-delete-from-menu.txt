@@ -1,15 +1,15 @@
-Qt Assistant
-Qt Creator
-Qt D-Bus Viewer
-Qt Linguist
-Qt Widgets Designer
-Qt Assistant
-Avahi SSH Server Browser
-Avahi VNC Server Browser
-mpv Media Player
-Qt V4L2 test Utility
-Qt V4L2 video capture utility
-Avahi Zeroconf Browser
-Hardware Locality lstopo
-Emoji Selector
-KWrite
+# Exact desktop entry IDs to hide from the KDE application menu.
+assistant.desktop
+bssh.desktop
+bvnc.desktop
+designer.desktop
+linguist.desktop
+qdbusviewer.desktop
+qv4l2.desktop
+qvidcap.desktop
+avahi-discover.desktop
+lstopo.desktop
+mpv.desktop
+org.kde.kwrite.desktop
+org.kde.plasma.emojier.desktop
+org.qt-project.qtcreator.desktop
