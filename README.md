@@ -2,10 +2,9 @@
 
 kmos is a practical Arch Linux installation toolkit.
 It provides:
-- a USB flasher,
-- a network bootstrap script for Arch ISO,
 - a lean base installer (`nodesktop`),
-- an optional KDE desktop layer with post-install customization.
+- an optional KDE desktop layer with post-install customization,
+- helper scripts for Wi-Fi bootstrap and USB flashing.
 
 ## How To Use It
 
@@ -27,6 +26,11 @@ cd kmos
 The installer handles partitioning, base setup, bootloader, and then asks for desktop mode:
 - `nodesktop` (headless/minimal), or
 - KDE desktop path (calls `desktop/kmos-kde-install.sh` + `desktop/kmos-kde-post.sh`).
+
+The root of the repository is intentionally small:
+- `kmos-archlinux-install.sh` is the main entrypoint,
+- `desktop/` contains KDE-specific install stages,
+- `tools/` contains reusable helper scripts.
 
 ### 4) If Ethernet Is NOT Available (Wi-Fi Path)
 Use the repository from external media, then run Wi-Fi setup first:
