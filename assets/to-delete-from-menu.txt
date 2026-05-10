@@ -1,15 +1,14 @@
-# Exact desktop entry IDs to hide from the KDE application menu.
 assistant.desktop
+avahi-discover.desktop
 bssh.desktop
 bvnc.desktop
 designer.desktop
 linguist.desktop
-qdbusviewer.desktop
-qv4l2.desktop
-qvidcap.desktop
-avahi-discover.desktop
 lstopo.desktop
 mpv.desktop
 org.kde.kwrite.desktop
 org.kde.plasma.emojier.desktop
 org.qt-project.qtcreator.desktop
+qdbusviewer.desktop
+qv4l2.desktop
+qvidcap.desktop
