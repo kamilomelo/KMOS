@@ -1078,7 +1078,6 @@ configure_target_system() {
 SUDOERS
 
   configure_ssh
-  bootstrap_paru
   install_kmos_assets
   configure_starship_bash
   configure_wifi_after_boot
@@ -1149,22 +1148,22 @@ SSHD_CONFIG
 
 bootstrap_paru() {
   local sudoers_file="$MOUNT_POINT/etc/sudoers.d/10-kmos-paru-bootstrap"
-  local build_root="/var/cache/kmos/aur"
+  local aur_root="/home/$PRIMARY_USER/.kaur"
 
   if arch-chroot "$MOUNT_POINT" bash -lc "command -v paru >/dev/null 2>&1 && paru --version >/dev/null 2>&1"; then
     return 0
   fi
 
-  arch-chroot "$MOUNT_POINT" rm -rf "$build_root/paru-bin" "$build_root/paru"
-  arch-chroot "$MOUNT_POINT" mkdir -p "$(dirname "$build_root")"
-  arch-chroot "$MOUNT_POINT" chown -R "$PRIMARY_USER:$PRIMARY_USER" "/var/cache/kmos"
+  arch-chroot "$MOUNT_POINT" mkdir -p "$aur_root"
+  arch-chroot "$MOUNT_POINT" rm -rf "$aur_root/paru-bin" "$aur_root/paru"
+  arch-chroot "$MOUNT_POINT" chown -R "$PRIMARY_USER:$PRIMARY_USER" "/home/$PRIMARY_USER/.kaur"
 
   install -Dm0440 /dev/stdin "$sudoers_file" <<EOF
 $PRIMARY_USER ALL=(ALL:ALL) NOPASSWD: /usr/bin/pacman
 EOF
 
-  arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "git clone https://aur.archlinux.org/paru-bin.git '$build_root/paru-bin'" || die "Could not clone paru-bin from AUR."
-  if arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "cd '$build_root/paru-bin' && makepkg -si --noconfirm --needed --clean --cleanbuild"; then
+  arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "git clone https://aur.archlinux.org/paru-bin.git '$aur_root/paru-bin'" || die "Could not clone paru-bin from AUR."
+  if arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "cd '$aur_root/paru-bin' && makepkg -si --noconfirm --needed --clean --cleanbuild"; then
     if arch-chroot "$MOUNT_POINT" bash -lc "command -v paru >/dev/null 2>&1 && paru --version >/dev/null 2>&1"; then
       rm -f "$sudoers_file"
       success "paru-bin bootstrapped in the base system."
@@ -1175,8 +1174,8 @@ EOF
   fi
 
   arch-chroot "$MOUNT_POINT" pacman -S --needed --noconfirm rust cargo
-  arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "git clone https://aur.archlinux.org/paru.git '$build_root/paru'" || die "Could not clone paru from AUR."
-  if ! arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "cd '$build_root/paru' && makepkg -si --noconfirm --needed --clean --cleanbuild"; then
+  arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "git clone https://aur.archlinux.org/paru.git '$aur_root/paru'" || die "Could not clone paru from AUR."
+  if ! arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "cd '$aur_root/paru' && makepkg -si --noconfirm --needed --clean --cleanbuild"; then
     rm -f "$sudoers_file"
     die "Could not build/install paru."
   fi
@@ -1492,6 +1491,8 @@ offer_kde_desktop() {
   info "Your base system is ready. Select no to keep it headless."
   if ask_yes_no "Do you want to install a desktop?" "yes"; then
     run_kde_installer
+  else
+    bootstrap_paru
   fi
 }
 

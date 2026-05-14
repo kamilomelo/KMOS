@@ -11,7 +11,6 @@ depends=(
   'konsole'
   'kmos-kde-plasma'
   'networkmanager'
-  'packagekit-qt6'
   'sddm'
 )
 
