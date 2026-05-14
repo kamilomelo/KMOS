@@ -766,7 +766,7 @@ ensure_paru_installed() {
     return 0
   fi
 
-  arch-chroot "$MOUNT_POINT" pacman -S --needed --noconfirm paru
+  run_target_pacman_without_packagekit_hook "pacman -S --needed --noconfirm paru"
   success "paru installed."
 }
 
@@ -775,6 +775,12 @@ stage_aur_package_list() {
 
   install -Dm0644 "$ASSET_AUR_PACKAGE_LIST" "$MOUNT_POINT/usr/share/kmos/aur/kde-packages.txt"
   install -Dm0644 "$ASSET_AUR_PACKAGE_LIST" "$MOUNT_POINT$TARGET_AUR_PACKAGE_LIST"
+}
+
+run_target_pacman_without_packagekit_hook() {
+  local pacman_cmd="$1"
+
+  arch-chroot "$MOUNT_POINT" bash -lc "hook='/usr/share/libalpm/hooks/packagekit-refresh.hook'; disabled=\"\${hook}.kmos-disabled\"; if [[ -f \"\$hook\" ]]; then mv \"\$hook\" \"\$disabled\"; trap '[[ -f \"\$disabled\" ]] && mv \"\$disabled\" \"\$hook\"' EXIT; fi; $pacman_cmd"
 }
 
 write_aur_installer_script() {

@@ -316,7 +316,7 @@ install_nodesktop_metapackage() {
 
   [[ -r "$pkgbuild" ]] || return 0
   package_glob="$(build_target_metapackage "$pkgbuild")"
-  arch-chroot "$MOUNT_POINT" bash -lc "pacman -U --noconfirm $package_glob"
+  arch-chroot "$MOUNT_POINT" bash -lc "hook='/usr/share/libalpm/hooks/packagekit-refresh.hook'; disabled=\"\${hook}.kmos-disabled\"; if [[ -f \"\$hook\" ]]; then mv \"\$hook\" \"\$disabled\"; trap '[[ -f \"\$disabled\" ]] && mv \"\$disabled\" \"\$hook\"' EXIT; fi; pacman -U --noconfirm $package_glob"
   success "kmos-nodesktop metapackage installed into target system."
 }
 

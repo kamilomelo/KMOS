@@ -299,6 +299,12 @@ install_kde_packages() {
   success "KDE packages installed."
 }
 
+run_target_pacman_without_packagekit_hook() {
+  local pacman_cmd="$1"
+
+  arch-chroot "$MOUNT_POINT" bash -lc "hook='/usr/share/libalpm/hooks/packagekit-refresh.hook'; disabled=\"\${hook}.kmos-disabled\"; if [[ -f \"\$hook\" ]]; then mv \"\$hook\" \"\$disabled\"; trap '[[ -f \"\$disabled\" ]] && mv \"\$disabled\" \"\$hook\"' EXIT; fi; $pacman_cmd"
+}
+
 get_metapackage_builder_user() {
   local username=""
   local uid=""
@@ -348,7 +354,7 @@ install_kde_metapackages() {
     relative_path="$(metapackage_relative_path_for_name "$metapackage")" || die "Unknown kmos metapackage: $metapackage"
     pkgbuild="$(get_metapackage_pkgbuild "$metapackage" "$relative_path")"
     package_glob="$(build_target_metapackage "$pkgbuild")"
-    arch-chroot "$MOUNT_POINT" bash -lc "pacman -U --noconfirm $package_glob"
+    run_target_pacman_without_packagekit_hook "pacman -U --noconfirm $package_glob"
     ((index += 1))
   done
 
@@ -378,7 +384,7 @@ remove_kwallet_helpers() {
   done
 
   if [[ ${#installed[@]} -gt 0 ]]; then
-    arch-chroot "$MOUNT_POINT" pacman -Rns --noconfirm "${installed[@]}" || warn "Could not remove optional KWallet helper packages."
+    run_target_pacman_without_packagekit_hook "pacman -Rns --noconfirm ${installed[*]}" || warn "Could not remove optional KWallet helper packages."
   fi
 }
 
@@ -407,7 +413,7 @@ remove_unwanted_packages() {
   done
 
   if [[ ${#installed[@]} -gt 0 ]]; then
-    arch-chroot "$MOUNT_POINT" pacman -Rns --noconfirm "${installed[@]}" || warn "Could not remove one or more unwanted packages: ${installed[*]}"
+    run_target_pacman_without_packagekit_hook "pacman -Rns --noconfirm ${installed[*]}" || warn "Could not remove one or more unwanted packages: ${installed[*]}"
     success "Removed unwanted packages when present: ${installed[*]}"
   fi
 }
