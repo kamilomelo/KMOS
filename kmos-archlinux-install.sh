@@ -978,11 +978,11 @@ install_base_system() {
     printf '\nDisableDownloadTimeout\n' >> "$pacman_conf"
   fi
   if grep -q '^ParallelDownloads = ' "$pacman_conf"; then
-    sed -i 's/^ParallelDownloads = .*/ParallelDownloads = 9/' "$pacman_conf"
+    sed -i 's/^ParallelDownloads = .*/ParallelDownloads = 6/' "$pacman_conf"
   elif grep -q '^#ParallelDownloads = ' "$pacman_conf"; then
-    sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 9/' "$pacman_conf"
+    sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 6/' "$pacman_conf"
   else
-    printf 'ParallelDownloads = 9\n' >> "$pacman_conf"
+    printf 'ParallelDownloads = 6\n' >> "$pacman_conf"
   fi
 
   run_with_retry "$PACMAN_RETRIES" pacstrap -C "$pacman_conf" -K "$MOUNT_POINT" "${BASE_PACKAGES[@]}" || die "pacstrap failed after ${PACMAN_RETRIES} attempts."
@@ -1024,15 +1024,15 @@ configure_pacman() {
   sed -i 's/^#Color$/Color/' "$pacman_conf"
 
   if grep -q '^#ParallelDownloads = ' "$pacman_conf"; then
-    sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 9/' "$pacman_conf"
+    sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 6/' "$pacman_conf"
   elif grep -q '^ParallelDownloads = ' "$pacman_conf"; then
-    sed -i 's/^ParallelDownloads = .*/ParallelDownloads = 9/' "$pacman_conf"
+    sed -i 's/^ParallelDownloads = .*/ParallelDownloads = 6/' "$pacman_conf"
   else
-    printf '\nParallelDownloads = 9\n' >> "$pacman_conf"
+    printf '\nParallelDownloads = 6\n' >> "$pacman_conf"
   fi
 
   if ! grep -q '^ILoveCandy$' "$pacman_conf"; then
-    sed -i '/^ParallelDownloads = 9$/a ILoveCandy' "$pacman_conf"
+    sed -i '/^ParallelDownloads = 6$/a ILoveCandy' "$pacman_conf"
   fi
 
   success "Pacman configured."
