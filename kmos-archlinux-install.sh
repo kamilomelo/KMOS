@@ -65,6 +65,7 @@ BASE_PACKAGES=(
   linux-firmware
   dhcpcd
   openssh
+  sudo
   wpa_supplicant
   nano
 )
@@ -1077,6 +1078,7 @@ configure_target_system() {
 SUDOERS
 
   configure_ssh
+  bootstrap_paru
   install_kmos_assets
   configure_starship_bash
   configure_wifi_after_boot
@@ -1143,6 +1145,34 @@ SSHD_CONFIG
 
   arch-chroot "$MOUNT_POINT" systemctl enable sshd.service
   success "OpenSSH enabled for first boot."
+}
+
+bootstrap_paru() {
+  local sudoers_file="$MOUNT_POINT/etc/sudoers.d/10-kmos-paru-bootstrap"
+  local build_root="/var/cache/kmos/aur/paru"
+
+  if arch-chroot "$MOUNT_POINT" command -v paru >/dev/null 2>&1; then
+    return 0
+  fi
+
+  arch-chroot "$MOUNT_POINT" pacman -S --needed --noconfirm rust cargo
+  arch-chroot "$MOUNT_POINT" rm -rf "$build_root"
+  arch-chroot "$MOUNT_POINT" mkdir -p "$(dirname "$build_root")"
+  arch-chroot "$MOUNT_POINT" chown -R "$PRIMARY_USER:$PRIMARY_USER" "/var/cache/kmos"
+
+  install -Dm0440 /dev/stdin "$sudoers_file" <<EOF
+$PRIMARY_USER ALL=(ALL:ALL) NOPASSWD: /usr/bin/pacman
+EOF
+
+  arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "git clone https://aur.archlinux.org/paru.git '$build_root'" || die "Could not clone paru from AUR."
+  if ! arch-chroot "$MOUNT_POINT" runuser -u "$PRIMARY_USER" -- bash -lc "cd '$build_root' && makepkg -si --noconfirm --needed --clean --cleanbuild"; then
+    rm -f "$sudoers_file"
+    die "Could not build/install paru."
+  fi
+
+  rm -f "$sudoers_file"
+  arch-chroot "$MOUNT_POINT" pacman -Rns --noconfirm rust cargo >/dev/null 2>&1 || warn "Could not remove temporary Rust build packages."
+  success "paru bootstrapped in the base system."
 }
 
 install_kmos_assets() {
