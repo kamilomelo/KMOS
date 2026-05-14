@@ -822,10 +822,19 @@ install_aur_packages() {
   mapfile -t packages < <(read_package_list_file "$ASSET_AUR_PACKAGE_LIST")
   [[ ${#packages[@]} -gt 0 ]] || return 0
 
-  builder_user="$(get_aur_builder_user)" || die "Could not find a normal user for AUR package installation."
+  builder_user="$(get_aur_builder_user)" || {
+    warn "Could not find a normal user for AUR package installation."
+    return 0
+  }
   group_list="$(arch-chroot "$MOUNT_POINT" id -nG "$builder_user" 2>/dev/null || true)"
-  [[ " $group_list " == *" wheel "* ]] || die "User $builder_user must be in wheel for paru-based installation."
-  arch-chroot "$MOUNT_POINT" bash -lc "command -v paru >/dev/null 2>&1" || die "paru is not installed in the target system."
+  if [[ " $group_list " != *" wheel "* ]]; then
+    warn "User $builder_user is not in wheel; skipping AUR package installation."
+    return 0
+  fi
+  if ! arch-chroot "$MOUNT_POINT" bash -lc "command -v paru >/dev/null 2>&1"; then
+    warn "paru is not installed in the target system; skipping AUR package installation."
+    return 0
+  fi
 
   stage_aur_package_list
   write_pacman_nohooks_wrapper "$MOUNT_POINT/usr/share/kmos/bin/kmos-pacman-nohooks"
@@ -837,7 +846,8 @@ EOF
 
   if ! arch-chroot "$MOUNT_POINT" runuser -u "$builder_user" -- /usr/share/kmos/bin/kmos-install-aur-packages.sh; then
     rm -f "$sudoers_file"
-    die "AUR package installation failed."
+    warn "AUR package installation failed."
+    return 0
   fi
 
   rm -f "$sudoers_file"

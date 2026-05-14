@@ -533,12 +533,32 @@ enable_kde_services() {
   success "Desktop services enabled."
 }
 
+get_aur_builder_user() {
+  local username=""
+  local uid=""
+  local home=""
+
+  while IFS=: read -r username _ uid _ _ home _; do
+    [[ "$uid" =~ ^[0-9]+$ ]] || continue
+    ((uid >= 1000)) || continue
+    [[ "$home" == /home/* ]] || continue
+    [[ -d "$MOUNT_POINT$home" ]] || continue
+    printf '%s\n' "$username"
+    return 0
+  done < "$MOUNT_POINT/etc/passwd"
+
+  return 1
+}
+
 bootstrap_paru() {
   local builder_user=""
   local sudoers_file="$MOUNT_POINT/etc/sudoers.d/10-kmos-paru-bootstrap"
   local aur_root=""
 
-  builder_user="$(get_aur_builder_user)" || die "Could not find a normal user for AUR helper installation."
+  builder_user="$(get_aur_builder_user)" || {
+    warn "Could not find a normal user for AUR helper installation."
+    return 1
+  }
   aur_root="/home/$builder_user/.kaur"
 
   if arch-chroot "$MOUNT_POINT" bash -lc "command -v paru >/dev/null 2>&1 && paru --version >/dev/null 2>&1"; then
@@ -553,7 +573,11 @@ bootstrap_paru() {
 $builder_user ALL=(ALL:ALL) NOPASSWD: /usr/bin/pacman
 EOF
 
-  arch-chroot "$MOUNT_POINT" runuser -u "$builder_user" -- bash -lc "git clone https://aur.archlinux.org/paru-bin.git '$aur_root/paru-bin'" || die "Could not clone paru-bin from AUR."
+  arch-chroot "$MOUNT_POINT" runuser -u "$builder_user" -- bash -lc "git clone https://aur.archlinux.org/paru-bin.git '$aur_root/paru-bin'" || {
+    rm -f "$sudoers_file"
+    warn "Could not clone paru-bin from AUR."
+    return 1
+  }
   if arch-chroot "$MOUNT_POINT" runuser -u "$builder_user" -- bash -lc "cd '$aur_root/paru-bin' && makepkg -si --noconfirm --needed --clean --cleanbuild"; then
     if arch-chroot "$MOUNT_POINT" bash -lc "command -v paru >/dev/null 2>&1 && paru --version >/dev/null 2>&1"; then
       rm -f "$sudoers_file"
@@ -564,11 +588,20 @@ EOF
     arch-chroot "$MOUNT_POINT" pacman -Rns --noconfirm paru-bin paru-bin-debug >/dev/null 2>&1 || true
   fi
 
-  arch-chroot "$MOUNT_POINT" pacman -S --needed --noconfirm rust cargo
-  arch-chroot "$MOUNT_POINT" runuser -u "$builder_user" -- bash -lc "git clone https://aur.archlinux.org/paru.git '$aur_root/paru'" || die "Could not clone paru from AUR."
+  if ! arch-chroot "$MOUNT_POINT" pacman -S --needed --noconfirm rust cargo; then
+    rm -f "$sudoers_file"
+    warn "Could not install temporary Rust build packages for paru."
+    return 1
+  fi
+  arch-chroot "$MOUNT_POINT" runuser -u "$builder_user" -- bash -lc "git clone https://aur.archlinux.org/paru.git '$aur_root/paru'" || {
+    rm -f "$sudoers_file"
+    warn "Could not clone paru from AUR."
+    return 1
+  }
   if ! arch-chroot "$MOUNT_POINT" runuser -u "$builder_user" -- bash -lc "cd '$aur_root/paru' && makepkg -si --noconfirm --needed --clean --cleanbuild"; then
     rm -f "$sudoers_file"
-    die "Could not build/install paru."
+    warn "Could not build/install paru."
+    return 1
   fi
 
   rm -f "$sudoers_file"
@@ -611,8 +644,8 @@ main() {
   disable_kwallet
   migrate_wifi_to_networkmanager
   enable_kde_services
-  bootstrap_paru
   run_kde_post_installer
+  bootstrap_paru || warn "AUR helper bootstrap skipped; KDE setup completed without AUR."
   final_success "KDE desktop layer installed. Reboot when ready."
 }
 
