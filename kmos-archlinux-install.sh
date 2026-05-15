@@ -1504,7 +1504,9 @@ offer_kde_desktop() {
     fi
     run_kde_installer
   else
-    bootstrap_paru
+    if ask_yes_no "Install paru for this headless system?" "yes"; then
+      bootstrap_paru
+    fi
   fi
 }
 
