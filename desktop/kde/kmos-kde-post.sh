@@ -305,6 +305,26 @@ hide_desktop_entry() {
   fi
 }
 
+hide_desktop_entry_in_home() {
+  local source="$1"
+  local home_dir="$2"
+  local rel_path="${source#"$MOUNT_POINT/usr/share/applications/"}"
+  local target="$home_dir/.local/share/applications/$rel_path"
+
+  install -Dm0644 "$source" "$target"
+  if grep -q '^[[:space:]]*NoDisplay=' "$target"; then
+    sed -i 's/^[[:space:]]*NoDisplay=.*/NoDisplay=true/' "$target"
+  else
+    printf '\nNoDisplay=true\n' >> "$target"
+  fi
+
+  if grep -q '^[[:space:]]*Hidden=' "$target"; then
+    sed -i 's/^[[:space:]]*Hidden=.*/Hidden=true/' "$target"
+  else
+    printf 'Hidden=true\n' >> "$target"
+  fi
+}
+
 write_kmenuedit_menu_overlay() {
   local target="$1"
   local name=""
@@ -342,9 +362,11 @@ refresh_menu_cache() {
 apply_menu_hides() {
   local app_dir="$MOUNT_POINT/usr/share/applications"
   local desktop=""
+  local home_dir=""
   local matched=0
   local pattern=""
   local name=""
+  local username=""
   local -a patterns=()
 
   [[ -d "$app_dir" ]] || return 0
@@ -370,9 +392,28 @@ apply_menu_hides() {
     for desktop in "$app_dir"/$pattern; do
       [[ -f "$desktop" ]] || continue
       hide_desktop_entry "$desktop"
+      hide_desktop_entry_in_home "$desktop" "$MOUNT_POINT/etc/skel"
+      hide_desktop_entry_in_home "$desktop" "$MOUNT_POINT/root"
+      if [[ -d "$MOUNT_POINT/home" ]]; then
+        while IFS= read -r -d '' home_dir; do
+          username="$(basename "$home_dir")"
+          hide_desktop_entry_in_home "$desktop" "$home_dir"
+          arch-chroot "$MOUNT_POINT" chown -R "$username:$username" "/home/$username/.local" 2>/dev/null || true
+        done < <(find "$MOUNT_POINT/home" -mindepth 1 -maxdepth 1 -type d -print0)
+      fi
       matched=1
     done
   done
+
+  write_kmenuedit_menu_overlay "$MOUNT_POINT/etc/skel/.config/menus/applications-kmenuedit.menu"
+  write_kmenuedit_menu_overlay "$MOUNT_POINT/root/.config/menus/applications-kmenuedit.menu"
+  if [[ -d "$MOUNT_POINT/home" ]]; then
+    while IFS= read -r -d '' home_dir; do
+      username="$(basename "$home_dir")"
+      write_kmenuedit_menu_overlay "$home_dir/.config/menus/applications-kmenuedit.menu"
+      arch-chroot "$MOUNT_POINT" chown -R "$username:$username" "/home/$username/.config/menus" 2>/dev/null || true
+    done < <(find "$MOUNT_POINT/home" -mindepth 1 -maxdepth 1 -type d -print0)
+  fi
 
   if ((matched == 1)); then
     success "Configured menu hides from asset list."
