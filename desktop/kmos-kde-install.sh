@@ -644,8 +644,8 @@ main() {
   disable_kwallet
   migrate_wifi_to_networkmanager
   enable_kde_services
+  bootstrap_paru || warn "AUR helper bootstrap skipped; continuing without AUR packages."
   run_kde_post_installer
-  bootstrap_paru || warn "AUR helper bootstrap skipped; KDE setup completed without AUR."
   final_success "KDE desktop layer installed. Reboot when ready."
 }
 
