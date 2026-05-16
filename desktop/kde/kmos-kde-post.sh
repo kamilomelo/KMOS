@@ -467,6 +467,27 @@ function configureDigitalClock(widget, timezone, showDate, dateFormat, timezoneF
     widget.reloadConfig();
 }
 
+function configureSystemMonitorWidget(widget, title, sensorId, totalSensors) {
+    if (!widget) {
+        return;
+    }
+
+    widget.currentConfigGroup = ["Appearance"];
+    widget.writeConfig("Title", title);
+    widget.writeConfig("chartFace", "org.kde.ksysguard.piechart");
+
+    widget.currentConfigGroup = ["SensorColors"];
+    widget.writeConfig(sensorId, "72,74,77");
+
+    widget.currentConfigGroup = ["Sensors"];
+    widget.writeConfig("highPrioritySensorIds", [sensorId]);
+    widget.writeConfig("totalSensors", totalSensors);
+
+    widget.currentConfigGroup = ["org.kde.ksysguard.piechart", "General"];
+    widget.writeConfig("showLegend", false);
+    widget.reloadConfig();
+}
+
 function removeWidgetsByTypes(panel, types) {
     for (var i = 0; i < types.length; ++i) {
         panel.widgets(types[i]).forEach(function(widget) {
@@ -504,9 +525,13 @@ for (var i = 0; i < panels.length; ++i) {
         continue;
     }
 
-    configureDigitalClock(bogotaClock, "America/Bogota", false, "isoDate", 1);
+    configureSystemMonitorWidget(systemMonitorOne, "CPU", "cpu/all/usage", ["cpu/all/usage"]);
+    configureSystemMonitorWidget(systemMonitorTwo, "GPU", "gpu/all/usage", ["gpu/all/usage"]);
+    configureSystemMonitorWidget(systemMonitorThree, "Memory", "memory/physical/used", ["memory/physical/used", "memory/physical/total"]);
+
+    configureDigitalClock(bogotaClock, "America/Bogota", false, "isoDate", "FullText");
     configureDigitalClock(localClock, "Local", false, "isoDate", 1);
-    configureDigitalClock(shanghaiClock, "Asia/Shanghai", false, "isoDate", 1);
+    configureDigitalClock(shanghaiClock, "Asia/Shanghai", false, "isoDate", "FullText");
 }
 EOF
 
