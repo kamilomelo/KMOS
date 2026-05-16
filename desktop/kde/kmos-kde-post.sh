@@ -462,6 +462,7 @@ function configureDigitalClock(widget, timezone, showDate, dateFormat, timezoneF
     widget.writeConfig("lastSelectedTimezone", timezone);
     widget.writeConfig("showDate", showDate);
     widget.writeConfig("dateFormat", dateFormat);
+    widget.writeConfig("use24hFormat", 2);
     widget.writeConfig("displayTimezoneFormat", timezoneFormat);
     widget.writeConfig("showLocalTimezone", true);
     widget.reloadConfig();
@@ -504,9 +505,9 @@ for (var i = 0; i < panels.length; ++i) {
         continue;
     }
 
-    configureDigitalClock(bogotaClock, "America/Bogota", false, "isoDate", "FullText");
-    configureDigitalClock(localClock, "Local", false, "isoDate", "FullText");
-    configureDigitalClock(shanghaiClock, "Asia/Shanghai", false, "isoDate", "FullText");
+    configureDigitalClock(bogotaClock, "America/Bogota", false, "isoDate", 1);
+    configureDigitalClock(localClock, "Local", false, "isoDate", 1);
+    configureDigitalClock(shanghaiClock, "Asia/Shanghai", false, "isoDate", 1);
 }
 EOF
 
