@@ -446,6 +446,46 @@ EOF
 
 apply_panel_widget_defaults() {
   install -Dm0644 /dev/stdin "$MOUNT_POINT/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/zz-kmos-panel-widgets.js" <<'EOF'
+function configureDigitalClock(widget, timezone, showDate, dateFormat, timezoneFormat) {
+    if (!widget) {
+        return;
+    }
+
+    widget.currentConfigGroup = ["Appearance"];
+    widget.writeConfig("selectedTimeZones", [timezone]);
+    widget.writeConfig("lastSelectedTimezone", timezone);
+    widget.writeConfig("showDate", showDate);
+    widget.writeConfig("dateFormat", dateFormat);
+    widget.writeConfig("displayTimezoneFormat", timezoneFormat);
+    widget.writeConfig("showLocalTimezone", true);
+    widget.reloadConfig();
+}
+
+function firstWidgetByTypes(panel, types) {
+    for (var i = 0; i < types.length; ++i) {
+        var widgets = panel.widgets(types[i]);
+        if (widgets.length > 0) {
+            return widgets[0];
+        }
+    }
+
+    return null;
+}
+
+function ensureWidgets(panel, type, count) {
+    var widgets = panel.widgets(type).slice();
+
+    while (widgets.length < count) {
+        var widget = panel.addWidget(type);
+        if (!widget) {
+            break;
+        }
+        widgets.push(widget);
+    }
+
+    return widgets;
+}
+
 var panels = panelIds;
 for (var i = 0; i < panels.length; ++i) {
     var panel = panelById(panels[i]);
@@ -453,43 +493,33 @@ for (var i = 0; i < panels.length; ++i) {
         continue;
     }
 
-    var widget = panel.addWidget("org.kde.plasma.digitalclock");
-    if (widget) {
-        widget.currentConfigGroup = ["Appearance"];
-        widget.writeConfig("displayTimezone", true);
+    panel.widgets("org.kde.plasma.networkmonitor").forEach(function(widget) {
+        widget.remove();
+    });
+
+    var clocks = ensureWidgets(panel, "org.kde.plasma.digitalclock", 3);
+    var systemMonitors = ensureWidgets(panel, "org.kde.plasma.systemmonitor", 3);
+    var networkWidgets = ensureWidgets(panel, "org.kde.plasma.systemmonitor.net", 1);
+    var systemTray = firstWidgetByTypes(panel, ["org.kde.plasma.systemtray"]);
+    var peekWidget = firstWidgetByTypes(panel, ["org.kde.plasma.minimizeall", "org.kde.plasma.showdesktop"]);
+
+    if (!peekWidget || !systemTray || clocks.length < 3 || systemMonitors.length < 3 || networkWidgets.length < 1) {
+        continue;
     }
 
-    widget = panel.addWidget("org.kde.plasma.digitalclock");
-    if (widget) {
-        widget.currentConfigGroup = ["Appearance"];
-        widget.writeConfig("displayTimezone", true);
-    }
+    configureDigitalClock(clocks[0], "Asia/Shanghai", false, "isoDate", "FullText");
+    configureDigitalClock(clocks[1], "Local", false, "isoDate", "FullText");
+    configureDigitalClock(clocks[2], "America/Bogota", false, "isoDate", "FullText");
 
-    widget = panel.addWidget("org.kde.plasma.digitalclock");
-    if (widget) {
-        widget.currentConfigGroup = ["Appearance"];
-        widget.writeConfig("displayTimezone", true);
-    }
-
-    widget = panel.addWidget("org.kde.plasma.networkmonitor");
-    if (widget) {
-        widget.currentConfigGroup = ["General"];
-    }
-
-    widget = panel.addWidget("org.kde.plasma.systemmonitor");
-    if (widget) {
-        widget.currentConfigGroup = ["General"];
-    }
-
-    widget = panel.addWidget("org.kde.plasma.systemmonitor");
-    if (widget) {
-        widget.currentConfigGroup = ["General"];
-    }
-
-    widget = panel.addWidget("org.kde.plasma.systemmonitor");
-    if (widget) {
-        widget.currentConfigGroup = ["General"];
-    }
+    var anchorIndex = systemTray.index + 1;
+    systemMonitors[0].index = anchorIndex;
+    systemMonitors[1].index = anchorIndex + 1;
+    systemMonitors[2].index = anchorIndex + 2;
+    networkWidgets[0].index = anchorIndex + 3;
+    clocks[0].index = anchorIndex + 4;
+    clocks[1].index = anchorIndex + 5;
+    clocks[2].index = anchorIndex + 6;
+    peekWidget.index = anchorIndex + 7;
 }
 EOF
 
