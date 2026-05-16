@@ -448,7 +448,7 @@ apply_panel_widget_defaults() {
   local layout_template="$MOUNT_POINT/usr/share/plasma/layout-templates/org.kde.plasma.desktop.defaultPanel/contents/layout.js"
 
   if [[ -f "$layout_template" ]]; then
-    perl -0pi -e 's/panel\.addWidget\("org\.kde\.plasma\.systemtray"\)\npanel\.addWidget\("org\.kde\.plasma\.digitalclock"\)\npanel\.addWidget\("org\.kde\.plasma\.showdesktop"\)/panel.addWidget("org.kde.plasma.systemtray")\npanel.addWidget("org.kde.plasma.systemmonitor")\npanel.addWidget("org.kde.plasma.systemmonitor")\npanel.addWidget("org.kde.plasma.systemmonitor")\npanel.addWidget("org.kde.plasma.systemmonitor.net")\npanel.addWidget("org.kde.plasma.digitalclock")\npanel.addWidget("org.kde.plasma.digitalclock")\npanel.addWidget("org.kde.plasma.digitalclock")\npanel.addWidget("org.kde.plasma.showdesktop")/' "$layout_template"
+    perl -0pi -e 's/panel\.addWidget\("org\.kde\.plasma\.systemtray"\)\npanel\.addWidget\("org\.kde\.plasma\.digitalclock"\)\npanel\.addWidget\("org\.kde\.plasma\.showdesktop"\)/panel.addWidget("org.kde.plasma.systemtray")\npanel.addWidget("org.kde.plasma.systemmonitor.kmos-cpu-gpu")\npanel.addWidget("org.kde.plasma.systemmonitor.kmos-mem")\npanel.addWidget("org.kde.plasma.systemmonitor.kmos-disk")\npanel.addWidget("org.kde.plasma.systemmonitor.net")\npanel.addWidget("org.kde.plasma.digitalclock")\npanel.addWidget("org.kde.plasma.digitalclock")\npanel.addWidget("org.kde.plasma.digitalclock")\npanel.addWidget("org.kde.plasma.showdesktop")/' "$layout_template"
   fi
 
   install -Dm0644 /dev/stdin "$MOUNT_POINT/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/zz-kmos-panel-widgets.js" <<'EOF'
@@ -464,27 +464,6 @@ function configureDigitalClock(widget, timezone, showDate, dateFormat, timezoneF
     widget.writeConfig("dateFormat", dateFormat);
     widget.writeConfig("displayTimezoneFormat", timezoneFormat);
     widget.writeConfig("showLocalTimezone", true);
-    widget.reloadConfig();
-}
-
-function configureSystemMonitorWidget(widget, title, sensorId, totalSensors) {
-    if (!widget) {
-        return;
-    }
-
-    widget.currentConfigGroup = ["Appearance"];
-    widget.writeConfig("Title", title);
-    widget.writeConfig("chartFace", "org.kde.ksysguard.piechart");
-
-    widget.currentConfigGroup = ["SensorColors"];
-    widget.writeConfig(sensorId, "72,74,77");
-
-    widget.currentConfigGroup = ["Sensors"];
-    widget.writeConfig("highPrioritySensorIds", [sensorId]);
-    widget.writeConfig("totalSensors", totalSensors);
-
-    widget.currentConfigGroup = ["org.kde.ksysguard.piechart", "General"];
-    widget.writeConfig("showLegend", false);
     widget.reloadConfig();
 }
 
@@ -506,15 +485,18 @@ for (var i = 0; i < panels.length; ++i) {
     removeWidgetsByTypes(panel, [
         "org.kde.plasma.networkmonitor",
         "org.kde.plasma.systemmonitor",
+        "org.kde.plasma.systemmonitor.kmos-cpu-gpu",
+        "org.kde.plasma.systemmonitor.kmos-mem",
+        "org.kde.plasma.systemmonitor.kmos-disk",
         "org.kde.plasma.systemmonitor.net",
         "org.kde.plasma.digitalclock",
         "org.kde.plasma.minimizeall",
         "org.kde.plasma.showdesktop"
     ]);
 
-    var systemMonitorOne = panel.addWidget("org.kde.plasma.systemmonitor");
-    var systemMonitorTwo = panel.addWidget("org.kde.plasma.systemmonitor");
-    var systemMonitorThree = panel.addWidget("org.kde.plasma.systemmonitor");
+    var systemMonitorOne = panel.addWidget("org.kde.plasma.systemmonitor.kmos-cpu-gpu");
+    var systemMonitorTwo = panel.addWidget("org.kde.plasma.systemmonitor.kmos-mem");
+    var systemMonitorThree = panel.addWidget("org.kde.plasma.systemmonitor.kmos-disk");
     var networkSpeed = panel.addWidget("org.kde.plasma.systemmonitor.net");
     var bogotaClock = panel.addWidget("org.kde.plasma.digitalclock");
     var localClock = panel.addWidget("org.kde.plasma.digitalclock");
@@ -524,10 +506,6 @@ for (var i = 0; i < panels.length; ++i) {
     if (!systemMonitorOne || !systemMonitorTwo || !systemMonitorThree || !networkSpeed || !bogotaClock || !localClock || !shanghaiClock || !peekWidget) {
         continue;
     }
-
-    configureSystemMonitorWidget(systemMonitorOne, "CPU", "cpu/all/usage", ["cpu/all/usage"]);
-    configureSystemMonitorWidget(systemMonitorTwo, "GPU", "gpu/all/usage", ["gpu/all/usage"]);
-    configureSystemMonitorWidget(systemMonitorThree, "Memory", "memory/physical/used", ["memory/physical/used", "memory/physical/total"]);
 
     configureDigitalClock(bogotaClock, "America/Bogota", false, "isoDate", "FullText");
     configureDigitalClock(localClock, "Local", false, "isoDate", 1);
@@ -728,6 +706,11 @@ stage_repo_assets() {
   if [[ -d "$REPO_ROOT/assets" ]]; then
     install -d -m 0755 "$MOUNT_POINT/opt/kmos/assets"
     cp -a "$REPO_ROOT/assets/." "$MOUNT_POINT/opt/kmos/assets/"
+  fi
+
+  if [[ -d "$REPO_ROOT/assets/sysmonitor" ]]; then
+    install -d -m 0755 "$MOUNT_POINT/usr/share/plasma/plasmoids"
+    cp -a "$REPO_ROOT/assets/sysmonitor/." "$MOUNT_POINT/usr/share/plasma/plasmoids/"
   fi
 }
 
