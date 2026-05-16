@@ -462,7 +462,6 @@ function configureDigitalClock(widget, timezone, showDate, dateFormat, timezoneF
     widget.writeConfig("lastSelectedTimezone", timezone);
     widget.writeConfig("showDate", showDate);
     widget.writeConfig("dateFormat", dateFormat);
-    widget.writeConfig("use24hFormat", 2);
     widget.writeConfig("displayTimezoneFormat", timezoneFormat);
     widget.writeConfig("showLocalTimezone", true);
     widget.reloadConfig();
