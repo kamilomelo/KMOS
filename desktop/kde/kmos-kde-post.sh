@@ -444,6 +444,58 @@ EOF
   success "Application Dashboard staged as default launcher."
 }
 
+apply_panel_widget_defaults() {
+  install -Dm0644 /dev/stdin "$MOUNT_POINT/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/zz-kmos-panel-widgets.js" <<'EOF'
+var panels = panelIds;
+for (var i = 0; i < panels.length; ++i) {
+    var panel = panelById(panels[i]);
+    if (!panel) {
+        continue;
+    }
+
+    var widget = panel.addWidget("org.kde.plasma.digitalclock");
+    if (widget) {
+        widget.currentConfigGroup = ["Appearance"];
+        widget.writeConfig("displayTimezone", true);
+    }
+
+    widget = panel.addWidget("org.kde.plasma.digitalclock");
+    if (widget) {
+        widget.currentConfigGroup = ["Appearance"];
+        widget.writeConfig("displayTimezone", true);
+    }
+
+    widget = panel.addWidget("org.kde.plasma.digitalclock");
+    if (widget) {
+        widget.currentConfigGroup = ["Appearance"];
+        widget.writeConfig("displayTimezone", true);
+    }
+
+    widget = panel.addWidget("org.kde.plasma.networkmonitor");
+    if (widget) {
+        widget.currentConfigGroup = ["General"];
+    }
+
+    widget = panel.addWidget("org.kde.plasma.systemmonitor");
+    if (widget) {
+        widget.currentConfigGroup = ["General"];
+    }
+
+    widget = panel.addWidget("org.kde.plasma.systemmonitor");
+    if (widget) {
+        widget.currentConfigGroup = ["General"];
+    }
+
+    widget = panel.addWidget("org.kde.plasma.systemmonitor");
+    if (widget) {
+        widget.currentConfigGroup = ["General"];
+    }
+}
+EOF
+
+  success "Panel widget defaults staged."
+}
+
 apply_taskmanager_unpin_defaults() {
   install -Dm0644 /dev/stdin "$MOUNT_POINT/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/zz-kmos-unpin-taskmanager.js" <<'EOF'
 var panels = panelIds;
@@ -828,6 +880,7 @@ apply_post_tweaks() {
   apply_lockscreen_defaults
   apply_desktop_wallpaper_defaults
   apply_application_dashboard_defaults
+  apply_panel_widget_defaults
   apply_taskmanager_unpin_defaults
   apply_color_scheme_defaults
   apply_konsole_defaults
